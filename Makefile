@@ -13,3 +13,6 @@ export GO111MODULE=on
 
 build:
 	@go run ./cmd/builder/main.go 
+
+dev: build
+	@trap 'exit 0' 2; go run -tags dynamic ./cmd/bootstrap || true

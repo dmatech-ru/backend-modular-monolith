@@ -1,0 +1,2 @@
+serviceName: "gateway-service"
+logLevel: "debug"
