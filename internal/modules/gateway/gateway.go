@@ -6,6 +6,7 @@ import (
 
 	"dmatech.ru/internal/pkg/config"
 	"dmatech.ru/internal/pkg/logger"
+	"dmatech.ru/internal/pkg/natsrpc"
 	"dmatech.ru/internal/pkg/service"
 )
 
@@ -23,6 +24,20 @@ func initialization(ctx context.Context) error {
 	}
 
 	log := logger.NewModuleLogger("Gateway", cfg.LogLevel)
+
+	nc, err := natsrpc.NewConnection(cfg.NatsURL, log)
+	if err != nil {
+		return fmt.Errorf("failed to connect to NATS: %w", err)
+	}
+
+	err = natsrpc.WatchRoutes(ctx, nc, log, cfg.Env, func(service, version string, bufBytes []byte, isDeleted bool) {
+		if isDeleted {
+			// router.Remove(service, version)
+			return
+		}
+
+		// router.CompileAndAdd(service, version, bufBytes)
+	})
 
 	log.Info("модуль успешно запущен!")
 

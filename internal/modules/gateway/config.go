@@ -26,5 +26,5 @@ type configuration struct {
 	ServiceName string     `yaml:"serviceName" env:"GATEWAY_SERVICE_NAME" required:"true"`
 	Http        HttpConfig `yaml:"http"`
 	LogLevel    string     `yaml:"logLevel" env:"GATEWAY_LOG_LEVEL" env-default:"info"`
-	Services    []string   `yaml:"services"`
+	Env         string     `yaml:"env" env:"IDENTITY_ENV" env-default:"development"`
 }
