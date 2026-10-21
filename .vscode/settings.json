@@ -1,0 +1,10 @@
+{
+    "go.buildFlags": [
+        "-tags=dynamic"
+    ],
+    "gopls": {
+        "build.buildFlags": [
+            "-tags=dynamic"
+        ]
+    }
+}
