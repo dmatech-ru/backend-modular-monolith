@@ -30,7 +30,7 @@ func initialization(ctx context.Context) error {
 		return fmt.Errorf("failed to connect to NATS: %w", err)
 	}
 
-	err = natsrpc.RegisterDescriptors(ctx, nc, cfg.Env, cfg.ServiceName, descriptorBytes)
+	err = natsrpc.RegisterDescriptors(ctx, nc, cfg.Env, cfg.ServiceName, cfg.AppVersion, descriptorBytes)
 	if err != nil {
 		return fmt.Errorf("failed to register module descriptors: %w", err)
 	}
