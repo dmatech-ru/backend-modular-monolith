@@ -1,2 +1,7 @@
 serviceName: "gateway-service"
 logLevel: "debug"
+env: "development"
+http:
+  addr: ":1987"
+  baseURL: "/api"
+  shutdownDelay: "0s"

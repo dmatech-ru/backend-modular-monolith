@@ -1,2 +1,4 @@
 bin/
 .env
+# Генерируется cmd/builder (make select / make modules-all)
+cmd/bootstrap/imports.go

@@ -2,212 +2,209 @@ package natsrpc
 
 import (
 	"context"
-	"crypto/sha256"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/nats-io/nuid"
 )
 
-const NodeHeartbeatTTL = 10 * time.Second
+// Registration — зарегистрированный в discovery инстанс сервиса.
+// Пока она открыта, фоновый тикер продлевает хартбит ноды и восстанавливает
+// маршрут, если тот пропал. Close снимает регистрацию.
+type Registration struct {
+	routes jetstream.KeyValue
+	nodes  jetstream.KeyValue
+	log    *slog.Logger
 
+	routeKey    string
+	nodeKey     string
+	nodesPrefix string
+	descriptor  []byte
+
+	cancel    context.CancelFunc
+	done      chan struct{}
+	closeOnce sync.Once
+	closeErr  error
+}
+
+// RegisterDescriptors публикует дескриптор маршрутов сервиса и хартбит текущего
+// инстанса. Фоновый keep-alive работает до вызова Registration.Close
+// (жизненный цикл не привязан к ctx: ctx ограничивает только саму регистрацию).
 func RegisterDescriptors(
-	ctx context.Context,
-	nc *nats.Conn,
-	env string,
-	serviceName string,
-	version string,
-	descriptorBytes []byte,
-) error {
-	js, err := jetstream.New(nc)
-	if err != nil {
-		return fmt.Errorf("failed to init jetstream: %w", err)
-	}
-
-	safeVersion := sanitizeVersion(version)
-
-	kv, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
-		Bucket:      "service_discovery",
-		Description: "Split-routing NATS JetStream KV Service Discovery with Versioning",
-		TTL:         NodeHeartbeatTTL,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to get kv bucket: %w", err)
-	}
-
-	hostname, err := os.Hostname()
-	if err != nil {
-		return fmt.Errorf("failed to get hostname: %w", err)
-	}
-
-	routeKey := fmt.Sprintf("discovery.%s.routes.%s.%s", env, serviceName, safeVersion)
-	nodeKey := fmt.Sprintf("discovery.%s.nodes.%s.%s.%s", env, serviceName, safeVersion, hostname)
-
-	exists, err := hasRoute(ctx, kv, routeKey)
-	if err != nil {
-		return fmt.Errorf("failed to check existing routes: %w", err)
-	}
-
-	if !exists {
-		_, err = kv.Put(ctx, routeKey, descriptorBytes)
-		if err != nil {
-			return fmt.Errorf("failed to put routes: %w", err)
-		}
-	}
-
-	_, err = kv.Put(ctx, nodeKey, []byte("alive"))
-	if err != nil {
-		return fmt.Errorf("failed to put initial node heartbeat: %w", err)
-	}
-
-	pingCtx, pingCancel := context.WithCancel(ctx)
-
-	go func() {
-		defer pingCancel()
-
-		ticker := time.NewTicker(NodeHeartbeatTTL / 3)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				putCtx, cancel := context.WithTimeout(pingCtx, 2*time.Second)
-				_, _ = kv.Put(putCtx, nodeKey, []byte("alive"))
-				cancel()
-
-			case <-pingCtx.Done():
-				cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-
-				_ = kv.Delete(cleanupCtx, nodeKey)
-
-				lister, err := kv.ListKeys(cleanupCtx)
-
-				hasOtherNodes := false
-				if err == nil {
-					// Define the target prefix filter manually: "discovery.dev.nodes.identity.1_0_0."
-					targetPrefix := fmt.Sprintf("discovery.%s.nodes.%s.%s.", env, serviceName, safeVersion)
-
-					for key := range lister.Keys() {
-						// Match if there is any other key sharing this exact environment, service, and version
-						if key != "" && strings.HasPrefix(key, targetPrefix) {
-							hasOtherNodes = true
-							break
-						}
-					}
-				}
-
-				// If no other replicas for this specific version exist, turn off the lights
-				if !hasOtherNodes {
-					_ = kv.Delete(cleanupCtx, routeKey)
-				}
-				return
-			}
-		}
-	}()
-
-	return nil
-}
-
-type RouteUpdate struct {
-	ServiceName string
-	Version     string
-	Bytes       []byte // Сырые байты Protobuf-дескриптора (buf)
-	IsDeleted   bool   // true, если последняя нода ушла и маршрут удален
-}
-
-func WatchRoutes(
 	ctx context.Context,
 	nc *nats.Conn,
 	log *slog.Logger,
 	env string,
-	onUpdate func(serviceName, version string, descriptorBytes []byte, isDeleted bool),
-) error {
+	serviceName string,
+	version string,
+	descriptorBytes []byte,
+) (*Registration, error) {
+	if err := requireTokens(map[string]string{"env": env, "serviceName": serviceName, "version": version}); err != nil {
+		return nil, err
+	}
+
 	js, err := jetstream.New(nc)
 	if err != nil {
-		return fmt.Errorf("failed to init jetstream: %w", err)
+		return nil, fmt.Errorf("failed to init jetstream: %w", err)
 	}
-
-	kv, err := js.KeyValue(ctx, "service_discovery")
+	routes, err := routesKV(ctx, js)
 	if err != nil {
-		return fmt.Errorf("failed to connect to kv bucket: %w", err)
+		return nil, err
 	}
-
-	searchPattern := fmt.Sprintf("discovery.%s.routes.>", env)
-	watcher, err := kv.Watch(ctx, searchPattern)
+	nodes, err := nodesKV(ctx, js)
 	if err != nil {
-		return fmt.Errorf("failed to create kv watcher: %w", err)
+		return nil, err
 	}
 
-	go func() {
-		defer watcher.Stop()
-		log.Info("Dynamic route watcher started inside discovery")
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get hostname: %w", err)
+	}
 
-		// Локальный кэш хэшей изолирован внутри горутины дискавери
-		routeHashes := make(map[string][32]byte)
+	env, serviceName, version = sanitizeToken(env), sanitizeToken(serviceName), sanitizeToken(version)
+	// nuid делает ключ уникальным даже для нескольких процессов на одном хосте.
+	instanceID := sanitizeToken(hostname) + "-" + nuid.Next()
 
-		for entry := range watcher.Updates() {
-			if entry == nil {
-				continue
+	r := &Registration{
+		routes:      routes,
+		nodes:       nodes,
+		log:         log,
+		routeKey:    routeKey(env, serviceName, version),
+		nodesPrefix: routeKey(env, serviceName, version) + ".",
+		descriptor:  descriptorBytes,
+		done:        make(chan struct{}),
+	}
+	r.nodeKey = r.nodesPrefix + instanceID
+
+	// Порядок важен: сначала хартбит, затем маршрут. Тогда уходящая
+	// конкурентно «последняя» нода либо увидит наш хартбит, либо наша запись
+	// маршрута сменит ревизию и её условное удаление не пройдёт (см. deregister).
+	if _, err := nodes.Put(ctx, r.nodeKey, []byte("alive")); err != nil {
+		return nil, fmt.Errorf("failed to put initial node heartbeat: %w", err)
+	}
+	// Маршрут пишется при каждом старте: так новая сборка той же версии
+	// обновляет дескриптор, а гейтвей отбрасывает дубликаты по хэшу.
+	if _, err := routes.Put(ctx, r.routeKey, descriptorBytes); err != nil {
+		_ = nodes.Delete(ctx, r.nodeKey)
+		return nil, fmt.Errorf("failed to put routes: %w", err)
+	}
+
+	loopCtx, cancel := context.WithCancel(context.Background())
+	r.cancel = cancel
+	go r.keepAlive(loopCtx)
+
+	log.Info("Service registered in discovery", "route", r.routeKey, "node", r.nodeKey)
+	return r, nil
+}
+
+func (r *Registration) keepAlive(ctx context.Context) {
+	defer close(r.done)
+
+	ticker := time.NewTicker(heartbeatInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			opCtx, cancel := context.WithTimeout(ctx, operationTimeout)
+			if _, err := r.nodes.Put(opCtx, r.nodeKey, []byte("alive")); err != nil {
+				r.log.Warn("Failed to renew node heartbeat", "node", r.nodeKey, "error", err)
 			}
-
-			keySegments := strings.Split(entry.Key(), ".")
-			if len(keySegments) < 5 {
-				continue
+			if err := r.ensureRoute(opCtx); err != nil {
+				r.log.Warn("Failed to ensure route", "route", r.routeKey, "error", err)
 			}
-
-			serviceName := keySegments[3]
-			version := keySegments[4]
-			routeID := serviceName + "." + version
-
-			// 1. Обработка жесткого удаления маршрута (последняя нода версии ушла)
-			if entry.Operation() == jetstream.KeyValueDelete || entry.Operation() == jetstream.KeyValuePurge {
-				log.Warn("Route removed completely", "service", serviceName, "version", version)
-				delete(routeHashes, routeID)
-
-				// Дергаем колбэк гейтвея на удаление
-				onUpdate(serviceName, version, nil, true)
-				continue
-			}
-
-			// 2. Обработка создания или обновления маршрута (KeyValuePut)
-			descriptorBytes := entry.Value()
-			currentHash := sha256.Sum256(descriptorBytes)
-
-			// Проверяем хэш. Если совпал — это холостой пинг продления TTL, игнорируем его!
-			if oldHash, exists := routeHashes[routeID]; exists && oldHash == currentHash {
-				continue
-			}
-
-			// Хэш изменился — это реальный деплой или первый запуск ноды
-			routeHashes[routeID] = currentHash
-			log.Info("New route version detected, triggering configuration", "service", serviceName, "version", version)
-
-			// Передаем чистые данные в колбэк гейтвея
-			onUpdate(serviceName, version, descriptorBytes, false)
+			cancel()
 		}
+	}
+}
 
-		log.Info("Route watcher stopped cleanly inside discovery")
-	}()
-
+// ensureRoute восстанавливает маршрут, если его удалили, пока нода жива
+// (например, в гонке с уходом другой реплики).
+func (r *Registration) ensureRoute(ctx context.Context) error {
+	_, err := r.routes.Get(ctx, r.routeKey)
+	if !errors.Is(err, jetstream.ErrKeyNotFound) {
+		return err
+	}
+	_, err = r.routes.Create(ctx, r.routeKey, r.descriptor)
+	if errors.Is(err, jetstream.ErrKeyExists) {
+		return nil // маршрут уже восстановила другая реплика
+	}
+	if err != nil {
+		return err
+	}
+	r.log.Warn("Route was missing and has been restored", "route", r.routeKey)
 	return nil
 }
 
-func hasRoute(ctx context.Context, kv jetstream.KeyValue, routeKey string) (bool, error) {
-	_, err := kv.Get(ctx, routeKey)
-	if err == nil {
-		return true, nil
-	}
-	if err == jetstream.ErrKeyNotFound {
-		return false, nil
-	}
-	return false, err
+// Close останавливает keep-alive, удаляет хартбит ноды и, если нода была
+// последней для своей версии, удаляет маршрут. Повторные вызовы безопасны.
+func (r *Registration) Close(ctx context.Context) error {
+	r.closeOnce.Do(func() {
+		r.cancel()
+		<-r.done
+		r.closeErr = r.deregister(ctx)
+		if r.closeErr == nil {
+			r.log.Info("Service deregistered from discovery", "node", r.nodeKey)
+		}
+	})
+	return r.closeErr
 }
 
-func sanitizeVersion(v string) string {
-	return strings.ReplaceAll(v, ".", "_")
+func (r *Registration) deregister(ctx context.Context) error {
+	if err := r.nodes.Delete(ctx, r.nodeKey); err != nil {
+		return fmt.Errorf("failed to delete node heartbeat: %w", err)
+	}
+
+	// Ревизия маршрута фиксируется ДО проверки соседей: если реплика стартует
+	// конкурентно, она либо уже видна в NodesBucket, либо перезапишет маршрут
+	// и удаление с LastRevision завершится ErrKeyRevisionMismatch.
+	entry, err := r.routes.Get(ctx, r.routeKey)
+	if errors.Is(err, jetstream.ErrKeyNotFound) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to read route: %w", err)
+	}
+
+	others, err := r.hasOtherNodes(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list nodes: %w", err)
+	}
+	if others {
+		return nil
+	}
+
+	// «Последний тушит свет».
+	err = r.routes.Delete(ctx, r.routeKey, jetstream.LastRevision(entry.Revision()))
+	if errors.Is(err, jetstream.ErrKeyRevisionMismatch) {
+		r.log.Debug("Route was republished by another replica, keeping it", "route", r.routeKey)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to delete route: %w", err)
+	}
+	return nil
+}
+
+func (r *Registration) hasOtherNodes(ctx context.Context) (bool, error) {
+	lister, err := r.nodes.ListKeysFiltered(ctx, r.nodesPrefix+">")
+	if err != nil {
+		return false, err
+	}
+	defer lister.Stop()
+
+	for key := range lister.Keys() {
+		if key != r.nodeKey {
+			return true, nil
+		}
+	}
+	return false, ctx.Err()
 }

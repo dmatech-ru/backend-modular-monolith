@@ -2,10 +2,12 @@ package logger
 
 import (
 	"context"
-	"fmt"
+	"io"
 	"log/slog"
 	"os"
+	"slices"
 	"strings"
+	"sync"
 )
 
 // ANSI цветовые коды для терминала
@@ -19,78 +21,142 @@ const (
 	colorBoldWhite = "\033[1;37m" // Имя модуля
 )
 
-// ColorHandler — кастомный хендлер для честного раскрашивания консоли
+// ColorHandler — slog.Handler для dev-окружения: цветной вывод вида
+// "time [Module] [LEVEL] message key=value". Каждая запись пишется одним
+// вызовом Write под общим мьютексом, поэтому строки из разных горутин
+// не перемешиваются.
 type ColorHandler struct {
-	slog.Handler
-	moduleName string // 🪄 Храним имя модуля прямо в хендлере
+	w          io.Writer
+	mu         *sync.Mutex
+	level      slog.Leveler
+	moduleName string
+	attrs      []byte // уже отформатированные атрибуты из WithAttrs
+	groups     []string
 }
 
-func (h *ColorHandler) Handle(ctx context.Context, r slog.Record) error {
-	var levelStr string
+func NewColorHandler(w io.Writer, moduleName string, level slog.Leveler) *ColorHandler {
+	return &ColorHandler{w: w, mu: &sync.Mutex{}, level: level, moduleName: moduleName}
+}
 
-	switch r.Level {
-	case slog.LevelDebug:
-		levelStr = colorBlue + "DEBUG" + colorReset
-	case slog.LevelInfo:
-		levelStr = colorGreen + "INFO" + colorReset
-	case slog.LevelWarn:
-		levelStr = colorYellow + "WARN" + colorReset
-	case slog.LevelError:
-		levelStr = colorRed + "ERROR" + colorReset
-	default:
-		levelStr = r.Level.String()
+func (h *ColorHandler) Enabled(_ context.Context, level slog.Level) bool {
+	return level >= h.level.Level()
+}
+
+func (h *ColorHandler) Handle(_ context.Context, r slog.Record) error {
+	buf := make([]byte, 0, 256)
+
+	if !r.Time.IsZero() {
+		buf = r.Time.AppendFormat(buf, "2006-01-02 15:04:05.000")
+		buf = append(buf, ' ')
 	}
-
-	timeStr := r.Time.Format("2006-01-02 15:04:05.000")
-
-	// Выводим строго по твоему шаблону: [ModuleName] [LEVEL] Message
 	if h.moduleName != "" {
-		fmt.Printf("%s %s[%s]%s [%s] %s", timeStr, colorBoldWhite, h.moduleName, colorReset, levelStr, r.Message)
+		buf = append(buf, colorBoldWhite+"["+h.moduleName+"]"+colorReset+" "...)
 	} else {
-		fmt.Printf("%s [system] [%s] %s", timeStr, levelStr, r.Message)
+		buf = append(buf, "[system] "...)
 	}
+	buf = append(buf, "["+levelString(r.Level)+"] "...)
+	buf = append(buf, r.Message...)
+	buf = append(buf, h.attrs...)
 
-	// Выводим остальные доп-параметры (исключая module)
+	prefix := h.groupPrefix()
 	r.Attrs(func(a slog.Attr) bool {
-		if a.Key == "module" {
-			return true
-		}
-		fmt.Printf(" %s%s%s=%v", colorCyan, a.Key, colorReset, a.Value.Any())
+		buf = appendAttr(buf, prefix, a)
 		return true
 	})
+	buf = append(buf, '\n')
 
-	fmt.Println()
-	return nil
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	_, err := h.w.Write(buf)
+	return err
 }
 
-// 🪄 НОВЫЙ ИЗОЛИРОВАННЫЙ КОНСТРУКТОР ДЛЯ МОДУЛЕЙ
-// Создает абсолютно независимый логгер со своим личным уровнем фильтрации!
-func NewModuleLogger(moduleName, levelStr string) *slog.Logger {
-	level := parseLevel(levelStr)
-	opts := &slog.HandlerOptions{Level: level}
-
-	var handler slog.Handler
-	if os.Getenv("APP_ENV") == "production" {
-		// На проде — JSON, но тоже с пришитым тегом модуля и своим уровнем
-		handler = slog.NewJSONHandler(os.Stdout, opts).WithAttrs([]slog.Attr{slog.String("module", moduleName)})
-	} else {
-		// В деве — наш красивый ColorHandler с изоляцией
-		handler = &ColorHandler{
-			Handler:    slog.NewTextHandler(os.Stdout, opts),
-			moduleName: moduleName,
-		}
+func (h *ColorHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	if len(attrs) == 0 {
+		return h
 	}
+	h2 := *h
+	h2.attrs = slices.Clip(h.attrs)
+	prefix := h.groupPrefix()
+	for _, a := range attrs {
+		h2.attrs = appendAttr(h2.attrs, prefix, a)
+	}
+	return &h2
+}
 
-	return slog.New(handler)
+func (h *ColorHandler) WithGroup(name string) slog.Handler {
+	if name == "" {
+		return h
+	}
+	h2 := *h
+	h2.groups = append(slices.Clip(h.groups), name)
+	return &h2
+}
+
+func (h *ColorHandler) groupPrefix() string {
+	if len(h.groups) == 0 {
+		return ""
+	}
+	return strings.Join(h.groups, ".") + "."
+}
+
+func appendAttr(buf []byte, prefix string, a slog.Attr) []byte {
+	a.Value = a.Value.Resolve()
+	if a.Equal(slog.Attr{}) {
+		return buf
+	}
+	// Имя модуля уже выведено в заголовке строки.
+	if prefix == "" && a.Key == "module" {
+		return buf
+	}
+	if a.Value.Kind() == slog.KindGroup {
+		groupPrefix := prefix
+		if a.Key != "" {
+			groupPrefix += a.Key + "."
+		}
+		for _, ga := range a.Value.Group() {
+			buf = appendAttr(buf, groupPrefix, ga)
+		}
+		return buf
+	}
+	buf = append(buf, " "+colorCyan+prefix+a.Key+colorReset+"="...)
+	return append(buf, a.Value.String()...)
+}
+
+func levelString(level slog.Level) string {
+	switch {
+	case level >= slog.LevelError:
+		return colorRed + level.String() + colorReset
+	case level >= slog.LevelWarn:
+		return colorYellow + level.String() + colorReset
+	case level >= slog.LevelInfo:
+		return colorGreen + level.String() + colorReset
+	default:
+		return colorBlue + level.String() + colorReset
+	}
+}
+
+// NewModuleLogger создаёт независимый логгер модуля со своим уровнем фильтрации.
+// При APP_ENV=production пишет JSON с атрибутом module, иначе — цветной текст.
+func NewModuleLogger(moduleName, levelStr string) *slog.Logger {
+	return newModuleLogger(os.Stdout, os.Getenv("APP_ENV") == "production", moduleName, levelStr)
+}
+
+func newModuleLogger(w io.Writer, production bool, moduleName, levelStr string) *slog.Logger {
+	level := parseLevel(levelStr)
+
+	if production {
+		handler := slog.NewJSONHandler(w, &slog.HandlerOptions{Level: level})
+		return slog.New(handler.WithAttrs([]slog.Attr{slog.String("module", moduleName)}))
+	}
+	return slog.New(NewColorHandler(w, moduleName, level))
 }
 
 func parseLevel(levelStr string) slog.Level {
 	switch strings.ToLower(strings.TrimSpace(levelStr)) {
 	case "debug":
 		return slog.LevelDebug
-	case "info":
-		return slog.LevelInfo
-	case "warn":
+	case "warn", "warning":
 		return slog.LevelWarn
 	case "error":
 		return slog.LevelError
