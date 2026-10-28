@@ -1,0 +1,7 @@
+version: v2
+modules:
+  - path: internal/pkg/proto
+  - path: internal/modules/identity/proto
+deps:
+  - buf.build/bufbuild/protovalidate
+

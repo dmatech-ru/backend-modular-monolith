@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package webapi.identity.auth.v1;
+
+import "webapi/v1/common/errors.proto";
+
+option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity;authv1";
+
+service IdentityAuthService {
+  rpc InitializeSession (InitializeSessionRequest) returns (InitializeSessionResponse);
+}
+
+message InitializeSessionRequest {
+  string identifier = 1;
+}
+
+message InitializeSessionResponse {
+  bool exists = 1;
+}
+
+message InitializeSessionError {
+  webapi.common.errors.v1.ErrorPayload error = 1;
+}

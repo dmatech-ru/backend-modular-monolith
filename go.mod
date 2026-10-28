@@ -3,9 +3,11 @@ module dmatech.ru
 go 1.26.5
 
 require (
+	connectrpc.com/connect v1.21.1
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/nats-io/nats.go v1.54.0
 	github.com/nats-io/nuid v1.0.1
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
