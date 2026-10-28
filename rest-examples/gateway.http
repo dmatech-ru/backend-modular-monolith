@@ -1,0 +1,12 @@
+### Переменные (адрес и baseURL по умолчанию из configs/gateway.yaml)
+@baseUrl = http://localhost:1987
+@basePath = /api
+
+### Health-check: процесс жив (не проверяет готовность)
+GET {{baseUrl}}/healthz
+
+### Readiness-check: готов принимать трафик
+GET {{baseUrl}}/readyz
+
+### Известные гейтвею маршруты: сервис, версия, размер дескриптора
+GET {{baseUrl}}{{basePath}}/_routes

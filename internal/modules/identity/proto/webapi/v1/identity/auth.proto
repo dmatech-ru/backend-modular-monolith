@@ -2,12 +2,26 @@ syntax = "proto3";
 
 package webapi.identity.auth.v1;
 
-import "webapi/v1/common/errors.proto";
-
 option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity;authv1";
 
 service IdentityAuthService {
+  // InitializeSession начинает вход по identifier (email или телефон) и
+  // возвращает параметры SRP-обмена (соль и публичное значение сервера) для
+  // второго шага. Если учётной записи с таким identifier не существует,
+  // возвращает ошибку NOT_FOUND.
   rpc InitializeSession (InitializeSessionRequest) returns (InitializeSessionResponse);
+
+  // CompleteAuthentication — второй шаг SRP: клиент доказывает знание пароля
+  // (client_proof), сервер проверяет его и в ответ присылает собственное
+  // доказательство (server_proof) для взаимной аутентификации. Session_id
+  // одноразовый: повторный вызов с тем же значением вернёт NOT_FOUND.
+  rpc CompleteAuthentication (CompleteAuthenticationRequest) returns (CompleteAuthenticationResponse);
+
+  // Register создаёт учётную запись. Пароль на сервер никогда не
+  // передаётся: salt и verifier клиент вычисляет локально (см. формулы в
+  // internal/pkg/srp) и присылает уже готовыми — доверие к транспорту не
+  // входит в модель угроз этого контракта.
+  rpc Register (RegisterRequest) returns (RegisterResponse);
 }
 
 message InitializeSessionRequest {
@@ -15,9 +29,41 @@ message InitializeSessionRequest {
 }
 
 message InitializeSessionResponse {
-  bool exists = 1;
+  // session_id — непрозрачный идентификатор SRP-обмена, нужен на втором шаге.
+  string session_id = 1;
+  // salt — соль (s), привязанная к учётной записи.
+  bytes salt = 2;
+  // server_public — публичное эфемерное значение сервера (B).
+  bytes server_public = 3;
 }
 
-message InitializeSessionError {
-  webapi.common.errors.v1.ErrorPayload error = 1;
+message CompleteAuthenticationRequest {
+  string session_id = 1;
+  // client_public — публичное эфемерное значение клиента (A).
+  bytes client_public = 2;
+  // client_proof — доказательство клиента (M1).
+  bytes client_proof = 3;
+}
+
+message CompleteAuthenticationResponse {
+  // server_proof — доказательство сервера (M2): клиент проверяет его, чтобы
+  // убедиться, что говорит с сервером, который действительно знает verifier.
+  bytes server_proof = 1;
+}
+
+message RegisterRequest {
+  // identifier — email или телефон; тип определяется по формату строки.
+  string identifier = 1;
+  // salt — соль, выбранная клиентом для этого пользователя.
+  bytes salt = 2;
+  // verifier — v = g^x mod N, вычислен клиентом из salt/identifier/пароля
+  // (см. srp.ComputeVerifier). Пароль в этом запросе не передаётся.
+  bytes verifier = 3;
+  string first_name = 4;
+  string last_name = 5;
+  string middle_name = 6;
+}
+
+message RegisterResponse {
+  string user_id = 1;
 }

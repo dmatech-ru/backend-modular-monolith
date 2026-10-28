@@ -11,7 +11,7 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"dmatech.ru/internal/pkg/logger"
-	"dmatech.ru/internal/pkg/natsrpc"
+	"dmatech.ru/internal/pkg/natsconn"
 	"dmatech.ru/internal/pkg/service"
 )
 
@@ -38,7 +38,7 @@ func run() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	nc, err := natsrpc.NewConnection(cfg.NatsURL, log)
+	nc, err := natsconn.New(cfg.NatsURL, log)
 	if err != nil {
 		log.Error("Не удалось подключиться к NATS", "url", cfg.NatsURL, "error", err)
 		return 1
@@ -63,7 +63,7 @@ func run() int {
 		log.Error("Ошибки при остановке модулей", "error", err)
 		exitCode = 1
 	}
-	if err := natsrpc.Drain(shutdownCtx, nc); err != nil {
+	if err := natsconn.Drain(shutdownCtx, nc); err != nil {
 		log.Error("Ошибка закрытия соединения с NATS", "error", err)
 		exitCode = 1
 	}

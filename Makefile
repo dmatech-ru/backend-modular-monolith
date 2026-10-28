@@ -6,7 +6,7 @@ export GOPRIVATE=dmatech.ru/*
 IMPORTS := cmd/bootstrap/imports.go
 STATICCHECK := honnef.co/go/tools/cmd/staticcheck@v0.8.2
 
-.PHONY: help select modules-all run dev build test test-integration vet lint fmt tidy nats-up nats-down
+.PHONY: help select modules-all run dev setup build test test-integration vet lint fmt tidy nats-up nats-down pg-up pg-down
 
 help: ## Список команд
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-18s %s\n", $$1, $$2}'
@@ -25,6 +25,9 @@ run: $(IMPORTS) ## Запустить приложение с выбранным
 	@trap 'exit 0' INT; go run -tags dynamic ./cmd/bootstrap
 
 dev: select run ## Выбрать модули и запустить
+
+setup: ## Применить миграции и сиды (перед первым запуском и после изменения сидов)
+	go run ./cmd/setup
 
 build: $(IMPORTS) ## Собрать бинарник в bin/app
 	go build -tags dynamic -o bin/app ./cmd/bootstrap
@@ -55,4 +58,10 @@ nats-up: ## Поднять NATS с JetStream
 	docker compose up -d nats
 
 nats-down: ## Остановить NATS
+	docker compose down
+
+pg-up: ## Поднять PostgreSQL (для identity)
+	docker compose up -d postgres
+
+pg-down: ## Остановить PostgreSQL
 	docker compose down

@@ -10,38 +10,43 @@ import (
 
 	"connectrpc.com/connect"
 
+	"dmatech.ru/internal/modules/identity/repository"
 	common "dmatech.ru/internal/pkg/contracts/webapi/v1/common"
 	identityv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity"
 	"dmatech.ru/internal/pkg/contracts/webapi/v1/identity/authv1connect"
+	"dmatech.ru/internal/pkg/srp"
 )
 
-// AccountLookup проверяет, существует ли учётная запись с указанным
-// идентификатором (username, email или номер телефона).
-type AccountLookup interface {
-	Exists(ctx context.Context, identifier string) (bool, error)
+// Repository — доступ к данным, нужный обработчику. Реализуется
+// *repository.Repository поверх PostgreSQL; интерфейс объявлен на стороне
+// потребителя (здесь), чтобы тесты могли подставить фейк без реальной БД.
+type Repository interface {
+	FindAuth(ctx context.Context, identifier string) (repository.AuthRecord, error)
+	CreateChallenge(ctx context.Context, userID string, verifier, serverSecret, serverPublic []byte) (string, error)
+	ConsumeChallenge(ctx context.Context, challengeID string) (repository.ChallengeRecord, error)
+	CreateUser(ctx context.Context, p repository.CreateUserParams) (string, error)
 }
 
 // AuthHandler реализует authv1connect.IdentityAuthServiceHandler.
 type AuthHandler struct {
 	authv1connect.UnimplementedIdentityAuthServiceHandler
 
-	lookup AccountLookup
+	repo Repository
 }
 
-// NewAuthHandler создаёт обработчик IdentityAuthService, использующий lookup
-// для проверки существования учётной записи.
-func NewAuthHandler(lookup AccountLookup) *AuthHandler {
-	return &AuthHandler{lookup: lookup}
+// NewAuthHandler создаёт обработчик IdentityAuthService поверх repo.
+func NewAuthHandler(repo Repository) *AuthHandler {
+	return &AuthHandler{repo: repo}
 }
 
 // NewHandler собирает HTTP-обработчик IdentityAuthService для монтирования
 // в веб-сервер: возвращает путь монтирования и сам connect-handler.
-func NewHandler(lookup AccountLookup, opts ...connect.HandlerOption) (string, http.Handler) {
-	return authv1connect.NewIdentityAuthServiceHandler(NewAuthHandler(lookup), opts...)
+func NewHandler(repo Repository, opts ...connect.HandlerOption) (string, http.Handler) {
+	return authv1connect.NewIdentityAuthServiceHandler(NewAuthHandler(repo), opts...)
 }
 
-// InitializeSession проверяет идентификатор (username, email или телефон)
-// и сообщает, существует ли учётная запись с таким идентификатором.
+// InitializeSession — первый шаг SRP-входа: по identifier находит учётную
+// запись и генерирует эфемерные серверные значения SRP-обмена.
 func (h *AuthHandler) InitializeSession(
 	ctx context.Context,
 	req *connect.Request[identityv1.InitializeSessionRequest],
@@ -51,26 +56,120 @@ func (h *AuthHandler) InitializeSession(
 		return nil, fieldError(connect.CodeInvalidArgument, "identifier", "identifier must not be empty")
 	}
 
-	exists, err := h.lookup.Exists(ctx, identifier)
+	auth, err := h.repo.FindAuth(ctx, identifier)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("account not found"))
+	}
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	return connect.NewResponse(&identityv1.InitializeSessionResponse{Exists: exists}), nil
+	serverSecret, serverPublic, err := srp.NewServerChallenge(auth.Verifier)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	sessionID, err := h.repo.CreateChallenge(ctx, auth.UserID, auth.Verifier, serverSecret, serverPublic)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	return connect.NewResponse(&identityv1.InitializeSessionResponse{
+		SessionId:    sessionID,
+		Salt:         auth.Salt,
+		ServerPublic: serverPublic,
+	}), nil
 }
 
-// fieldError формирует connect-ошибку с деталями в формате InitializeSessionError,
+// CompleteAuthentication — второй шаг SRP-входа: проверяет доказательство
+// клиента и, если оно верно, отвечает собственным доказательством.
+func (h *AuthHandler) CompleteAuthentication(
+	ctx context.Context,
+	req *connect.Request[identityv1.CompleteAuthenticationRequest],
+) (*connect.Response[identityv1.CompleteAuthenticationResponse], error) {
+	sessionID := strings.TrimSpace(req.Msg.GetSessionId())
+	if sessionID == "" {
+		return nil, fieldError(connect.CodeInvalidArgument, "session_id", "session_id must not be empty")
+	}
+	clientPublic := req.Msg.GetClientPublic()
+	clientProof := req.Msg.GetClientProof()
+	if len(clientPublic) == 0 || len(clientProof) == 0 {
+		return nil, fieldError(connect.CodeInvalidArgument, "client_public", "client_public and client_proof are required")
+	}
+
+	challenge, err := h.repo.ConsumeChallenge(ctx, sessionID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil, connect.NewError(connect.CodeNotFound, errors.New("session not found or expired"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	serverProof, err := srp.VerifyClientProof(challenge.Verifier, challenge.ServerSecret, challenge.ServerPublic, clientPublic, clientProof)
+	switch {
+	case errors.Is(err, srp.ErrProofMismatch), errors.Is(err, srp.ErrInvalidPublicValue), errors.Is(err, srp.ErrValueTooLarge):
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid credentials"))
+	case err != nil:
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	return connect.NewResponse(&identityv1.CompleteAuthenticationResponse{ServerProof: serverProof}), nil
+}
+
+// Register создаёт учётную запись. Пароль на сервер не передаётся: salt и
+// verifier клиент вычисляет локально (srp.GenerateSalt + srp.ComputeVerifier)
+// и присылает уже готовыми — сервер их только проверяет по форме и хранит.
+func (h *AuthHandler) Register(
+	ctx context.Context,
+	req *connect.Request[identityv1.RegisterRequest],
+) (*connect.Response[identityv1.RegisterResponse], error) {
+	identifier := strings.TrimSpace(req.Msg.GetIdentifier())
+	if identifier == "" {
+		return nil, fieldError(connect.CodeInvalidArgument, "identifier", "identifier must not be empty")
+	}
+	salt := req.Msg.GetSalt()
+	verifier := req.Msg.GetVerifier()
+	if len(salt) == 0 {
+		return nil, fieldError(connect.CodeInvalidArgument, "salt", "salt must not be empty")
+	}
+	if !srp.ValidVerifier(verifier) {
+		return nil, fieldError(connect.CodeInvalidArgument, "verifier", "verifier is missing or malformed")
+	}
+
+	params := repository.CreateUserParams{
+		Salt:       salt,
+		Verifier:   verifier,
+		FirstName:  strings.TrimSpace(req.Msg.GetFirstName()),
+		LastName:   strings.TrimSpace(req.Msg.GetLastName()),
+		MiddleName: strings.TrimSpace(req.Msg.GetMiddleName()),
+	}
+	if strings.Contains(identifier, "@") {
+		params.Email = identifier
+	} else {
+		params.Phone = identifier
+	}
+
+	userID, err := h.repo.CreateUser(ctx, params)
+	if errors.Is(err, repository.ErrAlreadyExists) {
+		return nil, connect.NewError(connect.CodeAlreadyExists, errors.New("account already exists"))
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	return connect.NewResponse(&identityv1.RegisterResponse{UserId: userID}), nil
+}
+
+// fieldError формирует connect-ошибку с деталью в виде common.ErrorPayload,
 // чтобы клиент мог получить структурированную причину отказа по конкретному полю.
 func fieldError(code connect.Code, field, message string) error {
 	cerr := connect.NewError(code, errors.New(message))
 
-	payload := &identityv1.InitializeSessionError{
-		Error: &common.ErrorPayload{
-			Code:    int32(code),
-			Message: message,
-			Fields: []*common.FieldError{
-				{Name: field, Message: message},
-			},
+	payload := &common.ErrorPayload{
+		Code:    int32(code),
+		Message: message,
+		Fields: []*common.FieldError{
+			{Name: field, Message: message},
 		},
 	}
 	if detail, derr := connect.NewErrorDetail(payload); derr == nil {

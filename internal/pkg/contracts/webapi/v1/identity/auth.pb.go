@@ -7,7 +7,6 @@
 package authv1
 
 import (
-	common "dmatech.ru/internal/pkg/contracts/webapi/v1/common"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -67,8 +66,13 @@ func (x *InitializeSessionRequest) GetIdentifier() string {
 }
 
 type InitializeSessionResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Exists        bool                   `protobuf:"varint,1,opt,name=exists,proto3" json:"exists,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// session_id — непрозрачный идентификатор SRP-обмена, нужен на втором шаге.
+	SessionId string `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	// salt — соль (s), привязанная к учётной записи.
+	Salt []byte `protobuf:"bytes,2,opt,name=salt,proto3" json:"salt,omitempty"`
+	// server_public — публичное эфемерное значение сервера (B).
+	ServerPublic  []byte `protobuf:"bytes,3,opt,name=server_public,json=serverPublic,proto3" json:"server_public,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -103,34 +107,52 @@ func (*InitializeSessionResponse) Descriptor() ([]byte, []int) {
 	return file_webapi_v1_identity_auth_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *InitializeSessionResponse) GetExists() bool {
+func (x *InitializeSessionResponse) GetSessionId() string {
 	if x != nil {
-		return x.Exists
+		return x.SessionId
 	}
-	return false
+	return ""
 }
 
-type InitializeSessionError struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Error         *common.ErrorPayload   `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+func (x *InitializeSessionResponse) GetSalt() []byte {
+	if x != nil {
+		return x.Salt
+	}
+	return nil
+}
+
+func (x *InitializeSessionResponse) GetServerPublic() []byte {
+	if x != nil {
+		return x.ServerPublic
+	}
+	return nil
+}
+
+type CompleteAuthenticationRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	SessionId string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	// client_public — публичное эфемерное значение клиента (A).
+	ClientPublic []byte `protobuf:"bytes,2,opt,name=client_public,json=clientPublic,proto3" json:"client_public,omitempty"`
+	// client_proof — доказательство клиента (M1).
+	ClientProof   []byte `protobuf:"bytes,3,opt,name=client_proof,json=clientProof,proto3" json:"client_proof,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *InitializeSessionError) Reset() {
-	*x = InitializeSessionError{}
+func (x *CompleteAuthenticationRequest) Reset() {
+	*x = CompleteAuthenticationRequest{}
 	mi := &file_webapi_v1_identity_auth_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *InitializeSessionError) String() string {
+func (x *CompleteAuthenticationRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*InitializeSessionError) ProtoMessage() {}
+func (*CompleteAuthenticationRequest) ProtoMessage() {}
 
-func (x *InitializeSessionError) ProtoReflect() protoreflect.Message {
+func (x *CompleteAuthenticationRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_webapi_v1_identity_auth_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -142,33 +164,248 @@ func (x *InitializeSessionError) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use InitializeSessionError.ProtoReflect.Descriptor instead.
-func (*InitializeSessionError) Descriptor() ([]byte, []int) {
+// Deprecated: Use CompleteAuthenticationRequest.ProtoReflect.Descriptor instead.
+func (*CompleteAuthenticationRequest) Descriptor() ([]byte, []int) {
 	return file_webapi_v1_identity_auth_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *InitializeSessionError) GetError() *common.ErrorPayload {
+func (x *CompleteAuthenticationRequest) GetSessionId() string {
 	if x != nil {
-		return x.Error
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *CompleteAuthenticationRequest) GetClientPublic() []byte {
+	if x != nil {
+		return x.ClientPublic
 	}
 	return nil
+}
+
+func (x *CompleteAuthenticationRequest) GetClientProof() []byte {
+	if x != nil {
+		return x.ClientProof
+	}
+	return nil
+}
+
+type CompleteAuthenticationResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// server_proof — доказательство сервера (M2): клиент проверяет его, чтобы
+	// убедиться, что говорит с сервером, который действительно знает verifier.
+	ServerProof   []byte `protobuf:"bytes,1,opt,name=server_proof,json=serverProof,proto3" json:"server_proof,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CompleteAuthenticationResponse) Reset() {
+	*x = CompleteAuthenticationResponse{}
+	mi := &file_webapi_v1_identity_auth_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CompleteAuthenticationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CompleteAuthenticationResponse) ProtoMessage() {}
+
+func (x *CompleteAuthenticationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_webapi_v1_identity_auth_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CompleteAuthenticationResponse.ProtoReflect.Descriptor instead.
+func (*CompleteAuthenticationResponse) Descriptor() ([]byte, []int) {
+	return file_webapi_v1_identity_auth_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *CompleteAuthenticationResponse) GetServerProof() []byte {
+	if x != nil {
+		return x.ServerProof
+	}
+	return nil
+}
+
+type RegisterRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// identifier — email или телефон; тип определяется по формату строки.
+	Identifier string `protobuf:"bytes,1,opt,name=identifier,proto3" json:"identifier,omitempty"`
+	// salt — соль, выбранная клиентом для этого пользователя.
+	Salt []byte `protobuf:"bytes,2,opt,name=salt,proto3" json:"salt,omitempty"`
+	// verifier — v = g^x mod N, вычислен клиентом из salt/identifier/пароля
+	// (см. srp.ComputeVerifier). Пароль в этом запросе не передаётся.
+	Verifier      []byte `protobuf:"bytes,3,opt,name=verifier,proto3" json:"verifier,omitempty"`
+	FirstName     string `protobuf:"bytes,4,opt,name=first_name,json=firstName,proto3" json:"first_name,omitempty"`
+	LastName      string `protobuf:"bytes,5,opt,name=last_name,json=lastName,proto3" json:"last_name,omitempty"`
+	MiddleName    string `protobuf:"bytes,6,opt,name=middle_name,json=middleName,proto3" json:"middle_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RegisterRequest) Reset() {
+	*x = RegisterRequest{}
+	mi := &file_webapi_v1_identity_auth_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterRequest) ProtoMessage() {}
+
+func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_webapi_v1_identity_auth_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterRequest.ProtoReflect.Descriptor instead.
+func (*RegisterRequest) Descriptor() ([]byte, []int) {
+	return file_webapi_v1_identity_auth_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *RegisterRequest) GetIdentifier() string {
+	if x != nil {
+		return x.Identifier
+	}
+	return ""
+}
+
+func (x *RegisterRequest) GetSalt() []byte {
+	if x != nil {
+		return x.Salt
+	}
+	return nil
+}
+
+func (x *RegisterRequest) GetVerifier() []byte {
+	if x != nil {
+		return x.Verifier
+	}
+	return nil
+}
+
+func (x *RegisterRequest) GetFirstName() string {
+	if x != nil {
+		return x.FirstName
+	}
+	return ""
+}
+
+func (x *RegisterRequest) GetLastName() string {
+	if x != nil {
+		return x.LastName
+	}
+	return ""
+}
+
+func (x *RegisterRequest) GetMiddleName() string {
+	if x != nil {
+		return x.MiddleName
+	}
+	return ""
+}
+
+type RegisterResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RegisterResponse) Reset() {
+	*x = RegisterResponse{}
+	mi := &file_webapi_v1_identity_auth_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterResponse) ProtoMessage() {}
+
+func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_webapi_v1_identity_auth_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterResponse.ProtoReflect.Descriptor instead.
+func (*RegisterResponse) Descriptor() ([]byte, []int) {
+	return file_webapi_v1_identity_auth_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *RegisterResponse) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
 }
 
 var File_webapi_v1_identity_auth_proto protoreflect.FileDescriptor
 
 const file_webapi_v1_identity_auth_proto_rawDesc = "" +
 	"\n" +
-	"\x1dwebapi/v1/identity/auth.proto\x12\x17webapi.identity.auth.v1\x1a\x1dwebapi/v1/common/errors.proto\":\n" +
+	"\x1dwebapi/v1/identity/auth.proto\x12\x17webapi.identity.auth.v1\":\n" +
 	"\x18InitializeSessionRequest\x12\x1e\n" +
 	"\n" +
 	"identifier\x18\x01 \x01(\tR\n" +
-	"identifier\"3\n" +
-	"\x19InitializeSessionResponse\x12\x16\n" +
-	"\x06exists\x18\x01 \x01(\bR\x06exists\"U\n" +
-	"\x16InitializeSessionError\x12;\n" +
-	"\x05error\x18\x01 \x01(\v2%.webapi.common.errors.v1.ErrorPayloadR\x05error2\x91\x01\n" +
+	"identifier\"s\n" +
+	"\x19InitializeSessionResponse\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x12\n" +
+	"\x04salt\x18\x02 \x01(\fR\x04salt\x12#\n" +
+	"\rserver_public\x18\x03 \x01(\fR\fserverPublic\"\x86\x01\n" +
+	"\x1dCompleteAuthenticationRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12#\n" +
+	"\rclient_public\x18\x02 \x01(\fR\fclientPublic\x12!\n" +
+	"\fclient_proof\x18\x03 \x01(\fR\vclientProof\"C\n" +
+	"\x1eCompleteAuthenticationResponse\x12!\n" +
+	"\fserver_proof\x18\x01 \x01(\fR\vserverProof\"\xbe\x01\n" +
+	"\x0fRegisterRequest\x12\x1e\n" +
+	"\n" +
+	"identifier\x18\x01 \x01(\tR\n" +
+	"identifier\x12\x12\n" +
+	"\x04salt\x18\x02 \x01(\fR\x04salt\x12\x1a\n" +
+	"\bverifier\x18\x03 \x01(\fR\bverifier\x12\x1d\n" +
+	"\n" +
+	"first_name\x18\x04 \x01(\tR\tfirstName\x12\x1b\n" +
+	"\tlast_name\x18\x05 \x01(\tR\blastName\x12\x1f\n" +
+	"\vmiddle_name\x18\x06 \x01(\tR\n" +
+	"middleName\"+\n" +
+	"\x10RegisterResponse\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId2\xfe\x02\n" +
 	"\x13IdentityAuthService\x12z\n" +
-	"\x11InitializeSession\x121.webapi.identity.auth.v1.InitializeSessionRequest\x1a2.webapi.identity.auth.v1.InitializeSessionResponseB\xe4\x01\n" +
+	"\x11InitializeSession\x121.webapi.identity.auth.v1.InitializeSessionRequest\x1a2.webapi.identity.auth.v1.InitializeSessionResponse\x12\x89\x01\n" +
+	"\x16CompleteAuthentication\x126.webapi.identity.auth.v1.CompleteAuthenticationRequest\x1a7.webapi.identity.auth.v1.CompleteAuthenticationResponse\x12_\n" +
+	"\bRegister\x12(.webapi.identity.auth.v1.RegisterRequest\x1a).webapi.identity.auth.v1.RegisterResponseB\xe4\x01\n" +
 	"\x1bcom.webapi.identity.auth.v1B\tAuthProtoP\x01Z;dmatech.ru/internal/pkg/contracts/webapi/v1/identity;authv1\xa2\x02\x03WIA\xaa\x02\x17Webapi.Identity.Auth.V1\xca\x02\x17Webapi\\Identity\\Auth\\V1\xe2\x02#Webapi\\Identity\\Auth\\V1\\GPBMetadata\xea\x02\x1aWebapi::Identity::Auth::V1b\x06proto3"
 
 var (
@@ -183,22 +420,27 @@ func file_webapi_v1_identity_auth_proto_rawDescGZIP() []byte {
 	return file_webapi_v1_identity_auth_proto_rawDescData
 }
 
-var file_webapi_v1_identity_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_webapi_v1_identity_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_webapi_v1_identity_auth_proto_goTypes = []any{
-	(*InitializeSessionRequest)(nil),  // 0: webapi.identity.auth.v1.InitializeSessionRequest
-	(*InitializeSessionResponse)(nil), // 1: webapi.identity.auth.v1.InitializeSessionResponse
-	(*InitializeSessionError)(nil),    // 2: webapi.identity.auth.v1.InitializeSessionError
-	(*common.ErrorPayload)(nil),       // 3: webapi.common.errors.v1.ErrorPayload
+	(*InitializeSessionRequest)(nil),       // 0: webapi.identity.auth.v1.InitializeSessionRequest
+	(*InitializeSessionResponse)(nil),      // 1: webapi.identity.auth.v1.InitializeSessionResponse
+	(*CompleteAuthenticationRequest)(nil),  // 2: webapi.identity.auth.v1.CompleteAuthenticationRequest
+	(*CompleteAuthenticationResponse)(nil), // 3: webapi.identity.auth.v1.CompleteAuthenticationResponse
+	(*RegisterRequest)(nil),                // 4: webapi.identity.auth.v1.RegisterRequest
+	(*RegisterResponse)(nil),               // 5: webapi.identity.auth.v1.RegisterResponse
 }
 var file_webapi_v1_identity_auth_proto_depIdxs = []int32{
-	3, // 0: webapi.identity.auth.v1.InitializeSessionError.error:type_name -> webapi.common.errors.v1.ErrorPayload
-	0, // 1: webapi.identity.auth.v1.IdentityAuthService.InitializeSession:input_type -> webapi.identity.auth.v1.InitializeSessionRequest
-	1, // 2: webapi.identity.auth.v1.IdentityAuthService.InitializeSession:output_type -> webapi.identity.auth.v1.InitializeSessionResponse
-	2, // [2:3] is the sub-list for method output_type
-	1, // [1:2] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	0, // 0: webapi.identity.auth.v1.IdentityAuthService.InitializeSession:input_type -> webapi.identity.auth.v1.InitializeSessionRequest
+	2, // 1: webapi.identity.auth.v1.IdentityAuthService.CompleteAuthentication:input_type -> webapi.identity.auth.v1.CompleteAuthenticationRequest
+	4, // 2: webapi.identity.auth.v1.IdentityAuthService.Register:input_type -> webapi.identity.auth.v1.RegisterRequest
+	1, // 3: webapi.identity.auth.v1.IdentityAuthService.InitializeSession:output_type -> webapi.identity.auth.v1.InitializeSessionResponse
+	3, // 4: webapi.identity.auth.v1.IdentityAuthService.CompleteAuthentication:output_type -> webapi.identity.auth.v1.CompleteAuthenticationResponse
+	5, // 5: webapi.identity.auth.v1.IdentityAuthService.Register:output_type -> webapi.identity.auth.v1.RegisterResponse
+	3, // [3:6] is the sub-list for method output_type
+	0, // [0:3] is the sub-list for method input_type
+	0, // [0:0] is the sub-list for extension type_name
+	0, // [0:0] is the sub-list for extension extendee
+	0, // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_webapi_v1_identity_auth_proto_init() }
@@ -212,7 +454,7 @@ func file_webapi_v1_identity_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_webapi_v1_identity_auth_proto_rawDesc), len(file_webapi_v1_identity_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

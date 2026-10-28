@@ -11,10 +11,14 @@ type HttpConfig struct {
 	ReadHeaderTimeout time.Duration `yaml:"readHeaderTimeout" env:"GATEWAY_HTTP_READ_HEADER_TIMEOUT" env-default:"5s"`
 	ReadTimeout       time.Duration `yaml:"readTimeout" env:"GATEWAY_HTTP_READ_TIMEOUT" env-default:"15s"`
 	IdleTimeout       time.Duration `yaml:"idleTimeout" env:"GATEWAY_HTTP_IDLE_TIMEOUT" env-default:"60s"`
-	RequestTimeout    time.Duration `yaml:"requestTimeout" env:"GATEWAY_HTTP_REQUEST_TIMEOUT" env-default:"5s"`
-	// AuthRequestTimeout — таймаут обращения к identity при проксировании
-	// запросов; зарезервирован до появления проксирования.
-	AuthRequestTimeout    time.Duration `yaml:"authRequestTimeout" env:"GATEWAY_HTTP_AUTH_REQUEST_TIMEOUT" env-default:"10s"`
+	// RequestTimeout — таймаут для "статических" эндпоинтов (healthz/readyz/
+	// _routes), которые отвечают локально и быстро.
+	RequestTimeout time.Duration `yaml:"requestTimeout" env:"GATEWAY_HTTP_REQUEST_TIMEOUT" env-default:"5s"`
+	// ProxyRequestTimeout — отдельный, обычно больший таймаут ожидания ответа
+	// модуля через NATS при проксировании запроса (см. handleProxy). Не связан
+	// с RequestTimeout: латентность модуля не предсказать по латентности
+	// health-чеков, поэтому таймаут настраивается отдельно.
+	ProxyRequestTimeout   time.Duration `yaml:"proxyRequestTimeout" env:"GATEWAY_HTTP_PROXY_REQUEST_TIMEOUT" env-default:"10s"`
 	MaxHeaderBytes        int           `yaml:"maxHeaderBytes" env:"GATEWAY_HTTP_MAX_HEADER_BYTES" env-default:"32768"`
 	MaxBodyBytes          int64         `yaml:"maxBodyBytes" env:"GATEWAY_HTTP_MAX_BODY_BYTES" env-default:"1048576"`
 	MaxConcurrentRequests int           `yaml:"maxConcurrentRequests" env:"GATEWAY_HTTP_MAX_CONCURRENT_REQUESTS" env-default:"1000"`

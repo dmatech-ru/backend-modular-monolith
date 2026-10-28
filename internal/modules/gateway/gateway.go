@@ -8,7 +8,7 @@ import (
 
 	"dmatech.ru/internal/pkg/config"
 	"dmatech.ru/internal/pkg/logger"
-	"dmatech.ru/internal/pkg/natsrpc"
+	"dmatech.ru/internal/pkg/natsdiscovery"
 	"dmatech.ru/internal/pkg/service"
 )
 
@@ -31,15 +31,15 @@ func initialization(ctx context.Context) error {
 		return fmt.Errorf("gateway: %w", err)
 	}
 
-	routes := newRouteTable()
+	routes := newRouteTable(log)
 
-	watcher, err := natsrpc.WatchRoutes(ctx, nc, log, cfg.Env, routes.Apply)
+	watcher, err := natsdiscovery.WatchRoutes(ctx, nc, log, cfg.Env, routes.Apply)
 	if err != nil {
 		return fmt.Errorf("failed to watch routes: %w", err)
 	}
 	service.OnShutdown(watcher.Close)
 
-	srv := newServer(cfg.Http, log, routes)
+	srv := newServer(cfg.Http, cfg.Env, log, routes, nc)
 	if err := srv.Start(); err != nil {
 		return fmt.Errorf("failed to start http server: %w", err)
 	}

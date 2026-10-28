@@ -2,3 +2,12 @@ serviceName: "identity-service"
 logLevel: "debug"
 appVersion: "0.0.0"
 env: "development"
+postgresUrl: "postgres://postgres:postgres@postgres:5432/db?sslmode=disable"
+seeds:
+  db: "/mnt/workspace/backend-modular-monolith/seeds/identity/db"
+  assets: "/mnt/workspace/backend-modular-monolith/seeds/identity/assets"
+  assetsBucket: "public-assets"
+  assetsTimeout: 30m
+  levels:
+    - "shared"
+    - "development"

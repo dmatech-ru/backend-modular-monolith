@@ -4,105 +4,68 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
+
+	"github.com/nats-io/nats.go"
+
+	"dmatech.ru/internal/pkg/httpserver"
+	"dmatech.ru/internal/pkg/natsrpc"
 )
 
+// defaultProxyRequestTimeout подстраховывает programmatic-конструирование
+// HttpConfig (например, в тестах) без явного ProxyRequestTimeout: обычная
+// загрузка через config.Load всегда подставляет env-default.
+const defaultProxyRequestTimeout = 10 * time.Second
+
 type server struct {
-	cfg     HttpConfig
-	log     *slog.Logger
-	routes  *routeTable
-	httpSrv *http.Server
-	ready   atomic.Bool
-	served  chan struct{}
+	*httpserver.Server
+
+	cfg      HttpConfig
+	env      string
+	log      *slog.Logger
+	routes   *routeTable
+	nc       *nats.Conn
+	basePath string
 }
 
-func newServer(cfg HttpConfig, log *slog.Logger, routes *routeTable) *server {
-	s := &server{cfg: cfg, log: log, routes: routes, served: make(chan struct{})}
+func newServer(cfg HttpConfig, env string, log *slog.Logger, routes *routeTable, nc *nats.Conn) *server {
+	s := &server{cfg: cfg, env: env, log: log, routes: routes, nc: nc}
+	s.basePath = strings.TrimSuffix(path.Join("/", cfg.BaseUrl), "/")
 
-	base := strings.TrimSuffix(path.Join("/", cfg.BaseUrl), "/")
+	// healthz/readyz/_routes отвечают локально и быстро, поэтому делят общий
+	// RequestTimeout; у проксирования — свой ProxyRequestTimeout (см. handleProxy),
+	// не связанный с латентностью health-чеков, поэтому он не оборачивается здесь.
+	static := func(h http.HandlerFunc) http.Handler {
+		return httpserver.Timeout(h, cfg.RequestTimeout, "request timeout")
+	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /healthz", s.handleHealth)
-	mux.HandleFunc("GET /readyz", s.handleReady)
-	mux.HandleFunc("GET "+base+"/_routes", s.handleRoutes)
-	mux.HandleFunc(base+"/", s.handleProxy)
+	mux.Handle("GET /healthz", static(s.handleHealth))
+	mux.Handle("GET /readyz", static(s.handleReady))
+	mux.Handle("GET "+s.basePath+"/_routes", static(s.handleRoutes))
+	mux.HandleFunc(s.basePath+"/", s.handleProxy)
 
-	var handler http.Handler = mux
-	if cfg.RequestTimeout > 0 {
-		handler = http.TimeoutHandler(handler, cfg.RequestTimeout, "request timeout")
-	}
-	handler = s.limitBody(handler)
-	handler = s.limitConcurrency(handler)
-	if cfg.Debug {
-		handler = s.logRequests(handler)
-	}
+	s.Server = httpserver.New(httpserver.Config{
+		Addr:                  cfg.Addr,
+		TLSCert:               cfg.TLSCert,
+		TLSKey:                cfg.TLSKey,
+		ReadHeaderTimeout:     cfg.ReadHeaderTimeout,
+		ReadTimeout:           cfg.ReadTimeout,
+		IdleTimeout:           cfg.IdleTimeout,
+		MaxHeaderBytes:        cfg.MaxHeaderBytes,
+		MaxBodyBytes:          cfg.MaxBodyBytes,
+		MaxConcurrentRequests: cfg.MaxConcurrentRequests,
+		ShutdownDelay:         cfg.ShutdownDelay,
+		Debug:                 cfg.Debug,
+	}, log, mux)
 
-	s.httpSrv = &http.Server{
-		Addr:              cfg.Addr,
-		Handler:           handler,
-		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
-		ReadTimeout:       cfg.ReadTimeout,
-		IdleTimeout:       cfg.IdleTimeout,
-		MaxHeaderBytes:    cfg.MaxHeaderBytes,
-		ErrorLog:          slog.NewLogLogger(log.Handler(), slog.LevelWarn),
-	}
 	return s
-}
-
-// Start открывает порт синхронно (ошибка привязки возвращается сразу)
-// и обслуживает соединения в фоне.
-func (s *server) Start() error {
-	if (s.cfg.TLSCert == "") != (s.cfg.TLSKey == "") {
-		return errors.New("both tlsCertFile and tlsKeyFile must be set to enable TLS")
-	}
-
-	ln, err := net.Listen("tcp", s.cfg.Addr)
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		defer close(s.served)
-		var err error
-		if s.cfg.TLSCert != "" {
-			err = s.httpSrv.ServeTLS(ln, s.cfg.TLSCert, s.cfg.TLSKey)
-		} else {
-			err = s.httpSrv.Serve(ln)
-		}
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			s.log.Error("HTTP server stopped unexpectedly", "error", err)
-		}
-	}()
-
-	s.ready.Store(true)
-	return nil
-}
-
-// Shutdown снимает готовность, выжидает ShutdownDelay и плавно останавливает сервер.
-func (s *server) Shutdown(ctx context.Context) error {
-	s.ready.Store(false)
-
-	if s.cfg.ShutdownDelay > 0 {
-		timer := time.NewTimer(s.cfg.ShutdownDelay)
-		select {
-		case <-timer.C:
-		case <-ctx.Done():
-			timer.Stop()
-		}
-	}
-
-	err := s.httpSrv.Shutdown(ctx)
-	select {
-	case <-s.served:
-	case <-ctx.Done():
-	}
-	return err
 }
 
 func (s *server) handleHealth(w http.ResponseWriter, _ *http.Request) {
@@ -110,7 +73,7 @@ func (s *server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *server) handleReady(w http.ResponseWriter, _ *http.Request) {
-	if !s.ready.Load() {
+	if !s.Ready() {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
@@ -124,41 +87,84 @@ func (s *server) handleRoutes(w http.ResponseWriter, _ *http.Request) {
 	}
 }
 
-// handleProxy — точка подключения проксирования на основе дескрипторов.
-func (s *server) handleProxy(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "proxying is not implemented yet", http.StatusNotImplemented)
-}
+// handleProxy пересылает HTTP-запрос вида "/{package.Service}/{Method}"
+// владеющему сервисом модулю через NATS request-reply и возвращает его ответ.
+func (s *server) handleProxy(w http.ResponseWriter, r *http.Request) {
+	methodPath := strings.TrimPrefix(r.URL.Path, s.basePath)
 
-func (s *server) limitBody(next http.Handler) http.Handler {
-	if s.cfg.MaxBodyBytes <= 0 {
-		return next
+	serviceName, ok := parseServiceName(methodPath)
+	if !ok {
+		http.NotFound(w, r)
+		return
 	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Body = http.MaxBytesReader(w, r.Body, s.cfg.MaxBodyBytes)
-		next.ServeHTTP(w, r)
+
+	rt, ok := s.routes.LookupService(serviceName)
+	if !ok {
+		http.Error(w, "service not found", http.StatusNotFound)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read request body", http.StatusBadRequest)
+		return
+	}
+
+	timeout := s.cfg.ProxyRequestTimeout
+	if timeout <= 0 {
+		timeout = defaultProxyRequestTimeout
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	defer cancel()
+
+	subject := natsrpc.RPCSubject(s.env, rt.Service, rt.Version, methodPath)
+	reply, err := s.nc.RequestMsgWithContext(ctx, &nats.Msg{
+		Subject: subject,
+		Header:  nats.Header(r.Header.Clone()),
+		Data:    body,
 	})
+
+	switch {
+	case errors.Is(err, nats.ErrNoResponders):
+		http.Error(w, "service instance unavailable", http.StatusServiceUnavailable)
+		return
+	case errors.Is(err, context.DeadlineExceeded):
+		http.Error(w, "upstream request timed out", http.StatusGatewayTimeout)
+		return
+	case err != nil:
+		s.log.Error("Failed to forward request over NATS", "subject", subject, "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	writeProxyResponse(w, reply)
 }
 
-func (s *server) limitConcurrency(next http.Handler) http.Handler {
-	if s.cfg.MaxConcurrentRequests <= 0 {
-		return next
-	}
-	slots := make(chan struct{}, s.cfg.MaxConcurrentRequests)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		select {
-		case slots <- struct{}{}:
-			defer func() { <-slots }()
-			next.ServeHTTP(w, r)
-		default:
-			http.Error(w, "too many concurrent requests", http.StatusServiceUnavailable)
+func writeProxyResponse(w http.ResponseWriter, reply *nats.Msg) {
+	status := http.StatusOK
+	if v := reply.Header.Get(natsrpc.RPCStatusHeader); v != "" {
+		if code, err := strconv.Atoi(v); err == nil {
+			status = code
 		}
-	})
+		reply.Header.Del(natsrpc.RPCStatusHeader)
+	}
+
+	for name, values := range reply.Header {
+		for _, v := range values {
+			w.Header().Add(name, v)
+		}
+	}
+	w.WriteHeader(status)
+	_, _ = w.Write(reply.Data)
 }
 
-func (s *server) logRequests(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		next.ServeHTTP(w, r)
-		s.log.Debug("HTTP request", "method", r.Method, "path", r.URL.Path, "duration", time.Since(start))
-	})
+// parseServiceName достаёт полное имя gRPC/Connect-сервиса из пути вида
+// "/{package.Service}/{Method}".
+func parseServiceName(p string) (string, bool) {
+	trimmed := strings.TrimPrefix(p, "/")
+	idx := strings.IndexByte(trimmed, '/')
+	if idx <= 0 || idx == len(trimmed)-1 {
+		return "", false
+	}
+	return trimmed[:idx], true
 }

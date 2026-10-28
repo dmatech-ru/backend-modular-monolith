@@ -1,0 +1,2 @@
+ALTER TABLE identity.auth
+    ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT FALSE;

@@ -1,0 +1,53 @@
+### Переменные
+@baseUrl = http://localhost:1987
+@basePath = /api
+@service = webapi.identity.auth.v1.IdentityAuthService
+
+### Register и CompleteAuthentication НЕЛЬЗЯ выразить статическим запросом:
+# пароль на сервер не передаётся вообще — salt/verifier (Register) и
+# client_public/client_proof (CompleteAuthentication) клиент вычисляет сам
+# настоящей SRP-математикой (см. формулы в internal/pkg/srp/srp.go).
+# Рабочий пример полного цикла Register → InitializeSession →
+# CompleteAuthentication — в
+# internal/modules/identity/handlers/webapi/v1/auth_test.go
+# (registerClientSide, loginAs).
+# POST {{baseUrl}}{{basePath}}/{{service}}/Register
+# POST {{baseUrl}}{{basePath}}/{{service}}/CompleteAuthentication
+
+### InitializeSession — первый шаг SRP-входа: сервер отвечает salt и своим
+# публичным значением (server_public), привязанными к session_id. Для этого
+# нужна уже зарегистрированная учётная запись (см. auth_test.go выше).
+#
+# admin@admin.local — дев-аккаунт из сида
+# (seeds/identity/db/shared/0001_first_user.sql, применяется через make setup),
+# пароль "admin12345". Это единственный пароль, для которого в репозитории
+# есть готовые salt/verifier, поэтому только им можно пройти
+# CompleteAuthentication целиком (через auth_test.go/loginAs).
+POST {{baseUrl}}{{basePath}}/{{service}}/InitializeSession
+Content-Type: application/json
+
+{
+  "identifier": "admin@admin.local"
+}
+
+### InitializeSession для несуществующего identifier — 404 (CodeNotFound)
+POST {{baseUrl}}{{basePath}}/{{service}}/InitializeSession
+Content-Type: application/json
+
+{
+  "identifier": "unknown@example.com"
+}
+
+### InitializeSession с пустым identifier — ошибка валидации (400, CodeInvalidArgument)
+POST {{baseUrl}}{{basePath}}/{{service}}/InitializeSession
+Content-Type: application/json
+
+{
+  "identifier": ""
+}
+
+### Неизвестный сервис в пути — гейтвей не найдёт владельца (404)
+POST {{baseUrl}}{{basePath}}/webapi.unknown.v1.UnknownService/Method
+Content-Type: application/json
+
+{}

@@ -8,15 +8,29 @@ services:
     volumes:
       - nats-data:/data
 
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: identity
+      POSTGRES_PASSWORD: identity
+      POSTGRES_DB: identity
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
   app:
     build: .
     profiles: ["app"]
     environment:
       NATS_URL: nats://nats:4222
+      IDENTITY_POSTGRES_URL: postgres://identity:identity@postgres:5432/identity?sslmode=disable
     ports:
       - "1987:1987"
     depends_on:
       - nats
+      - postgres
 
 volumes:
   nats-data:
+  postgres-data:
