@@ -24,7 +24,6 @@ type Repository interface {
 	FindAuth(ctx context.Context, identifier string) (repository.AuthRecord, error)
 	CreateChallenge(ctx context.Context, userID *string, verifier, serverSecret, serverPublic []byte) (string, error)
 	ConsumeChallenge(ctx context.Context, challengeID string) (repository.ChallengeRecord, error)
-	CreateUser(ctx context.Context, p repository.CreateUserParams) (string, error)
 }
 
 // AuthHandler реализует authv1connect.IdentityAuthServiceHandler.
@@ -131,50 +130,6 @@ func (h *AuthHandler) CompleteAuthentication(
 	}
 
 	return connect.NewResponse(&identityv1.CompleteAuthenticationResponse{ServerProof: serverProof}), nil
-}
-
-// Register создаёт учётную запись. Пароль на сервер не передаётся: salt и
-// verifier клиент вычисляет локально (srp.GenerateSalt + srp.ComputeVerifier)
-// и присылает уже готовыми — сервер их только проверяет по форме и хранит.
-func (h *AuthHandler) Register(
-	ctx context.Context,
-	req *connect.Request[identityv1.RegisterRequest],
-) (*connect.Response[identityv1.RegisterResponse], error) {
-	identifier := strings.TrimSpace(req.Msg.GetIdentifier())
-	if identifier == "" {
-		return nil, fieldError(connect.CodeInvalidArgument, "identifier", "identifier must not be empty")
-	}
-	salt := req.Msg.GetSalt()
-	verifier := req.Msg.GetVerifier()
-	if len(salt) == 0 {
-		return nil, fieldError(connect.CodeInvalidArgument, "salt", "salt must not be empty")
-	}
-	if !srp.ValidVerifier(verifier) {
-		return nil, fieldError(connect.CodeInvalidArgument, "verifier", "verifier is missing or malformed")
-	}
-
-	params := repository.CreateUserParams{
-		Salt:       salt,
-		Verifier:   verifier,
-		FirstName:  strings.TrimSpace(req.Msg.GetFirstName()),
-		LastName:   strings.TrimSpace(req.Msg.GetLastName()),
-		MiddleName: strings.TrimSpace(req.Msg.GetMiddleName()),
-	}
-	if strings.Contains(identifier, "@") {
-		params.Email = identifier
-	} else {
-		params.Phone = identifier
-	}
-
-	userID, err := h.repo.CreateUser(ctx, params)
-	if errors.Is(err, repository.ErrAlreadyExists) {
-		return nil, connect.NewError(connect.CodeAlreadyExists, errors.New("account already exists"))
-	}
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-
-	return connect.NewResponse(&identityv1.RegisterResponse{UserId: userID}), nil
 }
 
 // fieldError формирует connect-ошибку с деталью в виде common.ErrorPayload,

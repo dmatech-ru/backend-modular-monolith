@@ -1,0 +1,19 @@
+serviceName: "notifications-service"
+logLevel: "debug"
+appVersion: "0.0.0"
+env: "development"
+streamName: "notifications_outbound"
+maxDeliver: 5
+
+# email/telegram не заданы — оба канала работают через dev-заглушку (пишут
+# в лог, не отправляют реально). Чтобы включить настоящую отправку,
+# заполнить (или переопределить через NOTIFICATIONS_EMAIL_*/
+# NOTIFICATIONS_TELEGRAM_* — пароль/токен так и так лучше не в этом файле):
+# email:
+#   host: "smtp.example.com"
+#   port: 587
+#   username: "notifications@example.com"
+#   password: "..."
+#   from: "notifications@example.com"
+# telegram:
+#   botToken: "..."

@@ -10,6 +10,8 @@ COPY --from=build /out/app /app
 COPY configs /configs
 ENV APP_ENV=production \
     GATEWAY_CONFIG_PATH=/configs/gateway.yaml \
-    IDENTITY_CONFIG_PATH=/configs/identity.yaml
+    IDENTITY_CONFIG_PATH=/configs/identity.yaml \
+    CAPTCHA_CONFIG_PATH=/configs/captcha.yaml \
+    NOTIFICATIONS_CONFIG_PATH=/configs/notifications.yaml
 EXPOSE 1987
 ENTRYPOINT ["/app"]

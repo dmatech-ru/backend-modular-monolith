@@ -1,0 +1,6 @@
+serviceName: "captcha-service"
+logLevel: "debug"
+appVersion: "0.0.0"
+env: "development"
+defaultDifficulty: 18
+challengeTtl: "2m"

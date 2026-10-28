@@ -1,0 +1,17 @@
+### Переменные
+@baseUrl = http://localhost:1987
+@basePath = /api
+@service = webapi.captcha.v1.CaptchaService
+
+### IssueChallenge — единственный публичный метод captcha (через гейтвей);
+# VerifyChallenge наружу не торчит — он в internal.captcha.v1.CaptchaService
+# (internal/modules/captcha/proto/peer/v1/captcha/captcha.proto), вызывает
+# его только другой модуль по NATS, не браузер. Запрос пустой.
+POST {{baseUrl}}{{basePath}}/{{service}}/IssueChallenge
+Content-Type: application/json
+
+{}
+
+### Решение challenge (подбор nonce) требует настоящего перебора — см.
+# internal/pkg/pow.Solve (референсная реализация клиента для тестов/демо,
+# не для продакшена) и internal/modules/captcha/service_test.go.

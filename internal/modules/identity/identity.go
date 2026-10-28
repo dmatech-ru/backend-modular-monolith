@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/nats-io/nats.go"
 
@@ -28,6 +29,9 @@ const (
 	// minAntiEnumKeyBytes — минимальная длина antiEnumerationKey (см.
 	// srp.FakeCredentials): 256 бит, обычный запас для HMAC-секрета.
 	minAntiEnumKeyBytes = 32
+
+	// captchaCallTimeout — таймаут одного вызова captcha-модуля по NATS.
+	captchaCallTimeout = 5 * time.Second
 )
 
 // decodeAntiEnumKey декодирует antiEnumerationKey из конфига и проверяет его
@@ -75,7 +79,10 @@ func initialization(ctx context.Context) error {
 		return nil
 	})
 
-	descriptorBytes, err := protoset.Build(authv1.File_webapi_v1_identity_auth_proto)
+	descriptorBytes, err := protoset.Build(
+		authv1.File_webapi_v1_identity_auth_proto,
+		authv1.File_webapi_v1_identity_registration_proto,
+	)
 	if err != nil {
 		return fmt.Errorf("identity: failed to build descriptor set: %w", err)
 	}
@@ -86,9 +93,15 @@ func initialization(ctx context.Context) error {
 	}
 	service.OnShutdown(reg.Close)
 
-	sub, err := authhandler.Subscribe(nc, log, cfg.Env, cfg.ServiceName, cfg.AppVersion, identityrepo.New(pool), antiEnumKey)
+	repo := identityrepo.New(pool)
+	captcha := newCaptchaClient(nc, cfg.Env, cfg.CaptchaServiceName, cfg.CaptchaServiceVersion)
+	phones := &logSender{log: log, kind: "phone"}
+	emails := &logSender{log: log, kind: "email"}
+
+	sub, err := authhandler.Subscribe(nc, log, cfg.Env, cfg.ServiceName, cfg.AppVersion,
+		repo, antiEnumKey, repo, captcha, phones, emails)
 	if err != nil {
-		return fmt.Errorf("failed to subscribe IdentityAuthService: %w", err)
+		return fmt.Errorf("failed to subscribe identity services: %w", err)
 	}
 	service.OnShutdown(sub.Close)
 

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"path"
 	"strconv"
@@ -32,11 +33,13 @@ type server struct {
 	routes   *routeTable
 	nc       *nats.Conn
 	basePath string
+	guard    *methodGuard
 }
 
 func newServer(cfg HttpConfig, env string, log *slog.Logger, routes *routeTable, nc *nats.Conn) *server {
 	s := &server{cfg: cfg, env: env, log: log, routes: routes, nc: nc}
 	s.basePath = strings.TrimSuffix(path.Join("/", cfg.BaseUrl), "/")
+	s.guard = newMethodGuard(cfg.RateLimitRPS, cfg.RateLimitBurst, cfg.CircuitBreakerThreshold, cfg.CircuitBreakerCooldown)
 
 	// healthz/readyz/_routes отвечают локально и быстро, поэтому делят общий
 	// RequestTimeout; у проксирования — свой ProxyRequestTimeout (см. handleProxy),
@@ -104,6 +107,15 @@ func (s *server) handleProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	switch s.guard.Before(extractClientIP(r, s.cfg.TrustProxyHeaders), methodPath) {
+	case guardRateLimited:
+		http.Error(w, "rate limit exceeded for this method", http.StatusTooManyRequests)
+		return
+	case guardCircuitOpen:
+		http.Error(w, "circuit open: too many recent failures for this method", http.StatusServiceUnavailable)
+		return
+	}
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "failed to read request body", http.StatusBadRequest)
@@ -126,17 +138,23 @@ func (s *server) handleProxy(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case errors.Is(err, nats.ErrNoResponders):
+		s.guard.After(methodPath, false)
 		http.Error(w, "service instance unavailable", http.StatusServiceUnavailable)
 		return
 	case errors.Is(err, context.DeadlineExceeded):
+		s.guard.After(methodPath, false)
 		http.Error(w, "upstream request timed out", http.StatusGatewayTimeout)
 		return
 	case err != nil:
+		s.guard.After(methodPath, false)
 		s.log.Error("Failed to forward request over NATS", "subject", subject, "error", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
+	// Брейкер реагирует только на отказы транспорта (выше): сам ответ
+	// сервиса, даже 5xx, — не инфраструктурный отказ NATS, а бизнес-логика.
+	s.guard.After(methodPath, true)
 	writeProxyResponse(w, reply)
 }
 
@@ -167,4 +185,30 @@ func parseServiceName(p string) (string, bool) {
 		return "", false
 	}
 	return trimmed[:idx], true
+}
+
+// extractClientIP возвращает адрес клиента для ключа лимитера (см.
+// methodGuard). trustProxyHeaders — см. HttpConfig.TrustProxyHeaders:
+// без доверенного реверс-прокси перед гейтвеем X-Forwarded-For/X-Real-IP
+// — это просто то, что прислал сам клиент, и лимит по IP был бы
+// тривиально обходим подстановкой нового значения на каждый запрос.
+func extractClientIP(r *http.Request, trustProxyHeaders bool) string {
+	if trustProxyHeaders {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			// Первый адрес в списке — исходный клиент, остальные добавляют
+			// промежуточные прокси.
+			if comma := strings.IndexByte(xff, ','); comma >= 0 {
+				return strings.TrimSpace(xff[:comma])
+			}
+			return strings.TrimSpace(xff)
+		}
+		if xri := r.Header.Get("X-Real-IP"); xri != "" {
+			return strings.TrimSpace(xri)
+		}
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }

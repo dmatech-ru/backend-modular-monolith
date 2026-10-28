@@ -66,22 +66,21 @@ func (f *fakeRepository) ConsumeChallenge(_ context.Context, challengeID string)
 	return rec, nil
 }
 
-func (f *fakeRepository) CreateUser(_ context.Context, p repository.CreateUserParams) (string, error) {
+// seedUser заводит пользователя прямо в фейковом хранилище — для тестов
+// SRP-входа (InitializeSession/CompleteAuthentication), которым нужен уже
+// существующий аккаунт, но не интересует сама регистрация (см. registration_test.go).
+func (f *fakeRepository) seedUser(identifier, password string) {
+	salt, err := srp.GenerateSalt()
+	if err != nil {
+		panic(err) // тестовый хелпер, не часть продового пути
+	}
+	verifier := srp.ComputeVerifier(identifier, password, salt)
+
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	identifier := p.Email
-	if identifier == "" {
-		identifier = p.Phone
-	}
-	for _, u := range f.usersByID {
-		if u.identifier == identifier {
-			return "", repository.ErrAlreadyExists
-		}
-	}
 	f.nextID++
 	id := fmt.Sprintf("user-%d", f.nextID)
-	f.usersByID[id] = fakeUser{identifier: identifier, salt: p.Salt, verifier: p.Verifier}
-	return id, nil
+	f.usersByID[id] = fakeUser{identifier: identifier, salt: salt, verifier: verifier}
 }
 
 // testAntiEnumKey — секрет srp.FakeCredentials для тестов (не для прода,
@@ -99,72 +98,6 @@ func connectCode(t *testing.T, err error) connect.Code {
 		t.Fatalf("expected a *connect.Error, got %T: %v", err, err)
 	}
 	return cerr.Code()
-}
-
-// registerClientSide эмулирует клиента при регистрации: пароль никогда не
-// отправляется обработчику, только вычисленные из него salt/verifier.
-func registerClientSide(t *testing.T, h *AuthHandler, identifier, password string, firstName string) *connect.Response[identityv1.RegisterResponse] {
-	t.Helper()
-	salt, err := srp.GenerateSalt()
-	if err != nil {
-		t.Fatalf("GenerateSalt: %v", err)
-	}
-	verifier := srp.ComputeVerifier(identifier, password, salt)
-
-	resp, err := h.Register(context.Background(), connect.NewRequest(&identityv1.RegisterRequest{
-		Identifier: identifier,
-		Salt:       salt,
-		Verifier:   verifier,
-		FirstName:  firstName,
-	}))
-	if err != nil {
-		t.Fatalf("register: %v", err)
-	}
-	return resp
-}
-
-func TestRegister_Success(t *testing.T) {
-	h := newTestHandler()
-
-	resp := registerClientSide(t, h, "alice@example.com", "correct horse battery staple", "Alice")
-	if resp.Msg.GetUserId() == "" {
-		t.Fatal("expected non-empty user_id")
-	}
-}
-
-func TestRegister_DuplicateIdentifier(t *testing.T) {
-	h := newTestHandler()
-	registerClientSide(t, h, "alice@example.com", "correct horse battery staple", "")
-
-	salt, err := srp.GenerateSalt()
-	if err != nil {
-		t.Fatalf("GenerateSalt: %v", err)
-	}
-	verifier := srp.ComputeVerifier("alice@example.com", "a different password", salt)
-	_, err = h.Register(context.Background(), connect.NewRequest(&identityv1.RegisterRequest{
-		Identifier: "alice@example.com", Salt: salt, Verifier: verifier,
-	}))
-	if code := connectCode(t, err); code != connect.CodeAlreadyExists {
-		t.Fatalf("code = %v, want CodeAlreadyExists", code)
-	}
-}
-
-func TestRegister_MissingSaltOrVerifierRejected(t *testing.T) {
-	h := newTestHandler()
-
-	_, err := h.Register(context.Background(), connect.NewRequest(&identityv1.RegisterRequest{
-		Identifier: "alice@example.com", Verifier: []byte("v"), // без salt
-	}))
-	if code := connectCode(t, err); code != connect.CodeInvalidArgument {
-		t.Fatalf("missing salt: code = %v, want CodeInvalidArgument", code)
-	}
-
-	_, err = h.Register(context.Background(), connect.NewRequest(&identityv1.RegisterRequest{
-		Identifier: "alice@example.com", Salt: []byte("s"), // без verifier
-	}))
-	if code := connectCode(t, err); code != connect.CodeInvalidArgument {
-		t.Fatalf("missing verifier: code = %v, want CodeInvalidArgument", code)
-	}
 }
 
 // Анти-перечисление аккаунтов: несуществующий identifier не должен
@@ -280,11 +213,12 @@ func loginAs(t *testing.T, h *AuthHandler, identifier, password string) (*connec
 }
 
 func TestAuthFlow_RegisterThenLoginSucceeds(t *testing.T) {
-	h := newTestHandler()
+	repo := newFakeRepository()
+	h := NewAuthHandler(repo, testAntiEnumKey)
 	const identifier = "alice@example.com"
 	const password = "correct horse battery staple"
 
-	registerClientSide(t, h, identifier, password, "Alice")
+	repo.seedUser(identifier, password)
 
 	resp, err := loginAs(t, h, identifier, password)
 	if err != nil {
@@ -296,10 +230,11 @@ func TestAuthFlow_RegisterThenLoginSucceeds(t *testing.T) {
 }
 
 func TestAuthFlow_WrongPasswordIsRejected(t *testing.T) {
-	h := newTestHandler()
+	repo := newFakeRepository()
+	h := NewAuthHandler(repo, testAntiEnumKey)
 	const identifier = "alice@example.com"
 
-	registerClientSide(t, h, identifier, "correct horse battery staple", "")
+	repo.seedUser(identifier, "correct horse battery staple")
 
 	_, err := loginAs(t, h, identifier, "wrong password entirely")
 	if code := connectCode(t, err); code != connect.CodeUnauthenticated {
@@ -308,11 +243,12 @@ func TestAuthFlow_WrongPasswordIsRejected(t *testing.T) {
 }
 
 func TestCompleteAuthentication_SessionIsSingleUse(t *testing.T) {
-	h := newTestHandler()
+	repo := newFakeRepository()
+	h := NewAuthHandler(repo, testAntiEnumKey)
 	const identifier = "alice@example.com"
 	const password = "correct horse battery staple"
 
-	registerClientSide(t, h, identifier, password, "")
+	repo.seedUser(identifier, password)
 
 	ctx := context.Background()
 	initResp, err := h.InitializeSession(ctx, connect.NewRequest(&identityv1.InitializeSessionRequest{Identifier: identifier}))

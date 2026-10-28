@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package webapi.captcha.v1;
+
+option go_package = "dmatech.ru/internal/modules/captcha/proto/webapi/v1/captcha;captchawebapiv1";
+
+// CaptchaService (webapi) — публичная часть контракта captcha-модуля,
+// единственное, что реально нужно показать браузеру: свежий proof-of-work
+// challenge. Браузер решает его сам (JS, доли секунды CPU) и прикладывает
+// challenge/nonce к запросу защищаемого модуля (например,
+// IdentityRegistrationService.CheckIdentifier — см. pow_challenge/pow_nonce
+// в internal/modules/identity/proto/webapi/v1/identity/registration.proto).
+//
+// Проверка решения (VerifyChallenge) наружу НЕ торчит — она в
+// peer.captcha.v1.CaptchaService (peer/v1/captcha/captcha.proto) и
+// её вызывает сам защищаемый модуль сервер-сервер по NATS, а не браузер:
+// иначе браузер мог бы просто заявить "решение верное" без проверки.
+//
+// Браузер ходит сюда через гейтвей так же, как к любому другому webapi-
+// контракту — captcha для гейтвея ничем не отличается от identity, он не
+// знает, что часть её контракта (peer.captcha.v1) ему не предназначена,
+// это разделение только на уровне того, какие .proto лежат в webapi/, а
+// какие в peer/.
+service CaptchaService {
+  // IssueChallenge отдаёт новый challenge. Сложность (difficulty) браузер
+  // не выбирает — её определяет сервис сам (может поднять при повышенной
+  // нагрузке/подозрительной активности), иначе параметр стало бы можно
+  // занулить прямо в запросе.
+  rpc IssueChallenge (IssueChallengeRequest) returns (IssueChallengeResponse);
+}
+
+message IssueChallengeRequest {}
+
+message IssueChallengeResponse {
+  // challenge — непрозрачная случайная строка, вернуть как есть вместе с
+  // решением (pow_nonce) в защищаемый запрос.
+  string challenge = 1;
+  // difficulty — требуемое число ведущих нулевых бит в SHA-256(challenge || nonce).
+  int32 difficulty = 2;
+  // expires_at — unix-время (секунды), после которого challenge недействителен.
+  int64 expires_at = 3;
+}

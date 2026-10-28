@@ -39,9 +39,6 @@ const (
 	// IdentityAuthServiceCompleteAuthenticationProcedure is the fully-qualified name of the
 	// IdentityAuthService's CompleteAuthentication RPC.
 	IdentityAuthServiceCompleteAuthenticationProcedure = "/webapi.identity.auth.v1.IdentityAuthService/CompleteAuthentication"
-	// IdentityAuthServiceRegisterProcedure is the fully-qualified name of the IdentityAuthService's
-	// Register RPC.
-	IdentityAuthServiceRegisterProcedure = "/webapi.identity.auth.v1.IdentityAuthService/Register"
 )
 
 // IdentityAuthServiceClient is a client for the webapi.identity.auth.v1.IdentityAuthService
@@ -57,11 +54,6 @@ type IdentityAuthServiceClient interface {
 	// доказательство (server_proof) для взаимной аутентификации. Session_id
 	// одноразовый: повторный вызов с тем же значением вернёт NOT_FOUND.
 	CompleteAuthentication(context.Context, *connect.Request[identity.CompleteAuthenticationRequest]) (*connect.Response[identity.CompleteAuthenticationResponse], error)
-	// Register создаёт учётную запись. Пароль на сервер никогда не
-	// передаётся: salt и verifier клиент вычисляет локально (см. формулы в
-	// internal/pkg/srp) и присылает уже готовыми — доверие к транспорту не
-	// входит в модель угроз этого контракта.
-	Register(context.Context, *connect.Request[identity.RegisterRequest]) (*connect.Response[identity.RegisterResponse], error)
 }
 
 // NewIdentityAuthServiceClient constructs a client for the
@@ -88,12 +80,6 @@ func NewIdentityAuthServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(identityAuthServiceMethods.ByName("CompleteAuthentication")),
 			connect.WithClientOptions(opts...),
 		),
-		register: connect.NewClient[identity.RegisterRequest, identity.RegisterResponse](
-			httpClient,
-			baseURL+IdentityAuthServiceRegisterProcedure,
-			connect.WithSchema(identityAuthServiceMethods.ByName("Register")),
-			connect.WithClientOptions(opts...),
-		),
 	}
 }
 
@@ -101,7 +87,6 @@ func NewIdentityAuthServiceClient(httpClient connect.HTTPClient, baseURL string,
 type identityAuthServiceClient struct {
 	initializeSession      *connect.Client[identity.InitializeSessionRequest, identity.InitializeSessionResponse]
 	completeAuthentication *connect.Client[identity.CompleteAuthenticationRequest, identity.CompleteAuthenticationResponse]
-	register               *connect.Client[identity.RegisterRequest, identity.RegisterResponse]
 }
 
 // InitializeSession calls webapi.identity.auth.v1.IdentityAuthService.InitializeSession.
@@ -112,11 +97,6 @@ func (c *identityAuthServiceClient) InitializeSession(ctx context.Context, req *
 // CompleteAuthentication calls webapi.identity.auth.v1.IdentityAuthService.CompleteAuthentication.
 func (c *identityAuthServiceClient) CompleteAuthentication(ctx context.Context, req *connect.Request[identity.CompleteAuthenticationRequest]) (*connect.Response[identity.CompleteAuthenticationResponse], error) {
 	return c.completeAuthentication.CallUnary(ctx, req)
-}
-
-// Register calls webapi.identity.auth.v1.IdentityAuthService.Register.
-func (c *identityAuthServiceClient) Register(ctx context.Context, req *connect.Request[identity.RegisterRequest]) (*connect.Response[identity.RegisterResponse], error) {
-	return c.register.CallUnary(ctx, req)
 }
 
 // IdentityAuthServiceHandler is an implementation of the
@@ -132,11 +112,6 @@ type IdentityAuthServiceHandler interface {
 	// доказательство (server_proof) для взаимной аутентификации. Session_id
 	// одноразовый: повторный вызов с тем же значением вернёт NOT_FOUND.
 	CompleteAuthentication(context.Context, *connect.Request[identity.CompleteAuthenticationRequest]) (*connect.Response[identity.CompleteAuthenticationResponse], error)
-	// Register создаёт учётную запись. Пароль на сервер никогда не
-	// передаётся: salt и verifier клиент вычисляет локально (см. формулы в
-	// internal/pkg/srp) и присылает уже готовыми — доверие к транспорту не
-	// входит в модель угроз этого контракта.
-	Register(context.Context, *connect.Request[identity.RegisterRequest]) (*connect.Response[identity.RegisterResponse], error)
 }
 
 // NewIdentityAuthServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -158,20 +133,12 @@ func NewIdentityAuthServiceHandler(svc IdentityAuthServiceHandler, opts ...conne
 		connect.WithSchema(identityAuthServiceMethods.ByName("CompleteAuthentication")),
 		connect.WithHandlerOptions(opts...),
 	)
-	identityAuthServiceRegisterHandler := connect.NewUnaryHandler(
-		IdentityAuthServiceRegisterProcedure,
-		svc.Register,
-		connect.WithSchema(identityAuthServiceMethods.ByName("Register")),
-		connect.WithHandlerOptions(opts...),
-	)
 	return "/webapi.identity.auth.v1.IdentityAuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case IdentityAuthServiceInitializeSessionProcedure:
 			identityAuthServiceInitializeSessionHandler.ServeHTTP(w, r)
 		case IdentityAuthServiceCompleteAuthenticationProcedure:
 			identityAuthServiceCompleteAuthenticationHandler.ServeHTTP(w, r)
-		case IdentityAuthServiceRegisterProcedure:
-			identityAuthServiceRegisterHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -187,8 +154,4 @@ func (UnimplementedIdentityAuthServiceHandler) InitializeSession(context.Context
 
 func (UnimplementedIdentityAuthServiceHandler) CompleteAuthentication(context.Context, *connect.Request[identity.CompleteAuthenticationRequest]) (*connect.Response[identity.CompleteAuthenticationResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("webapi.identity.auth.v1.IdentityAuthService.CompleteAuthentication is not implemented"))
-}
-
-func (UnimplementedIdentityAuthServiceHandler) Register(context.Context, *connect.Request[identity.RegisterRequest]) (*connect.Response[identity.RegisterResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("webapi.identity.auth.v1.IdentityAuthService.Register is not implemented"))
 }

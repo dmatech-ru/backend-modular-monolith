@@ -1,0 +1,29 @@
+### Переменные
+@baseUrl = http://localhost:1987
+@basePath = /api
+@service = webapi.identity.auth.v1.IdentityRegistrationService
+
+### CheckIdentifier без pow_challenge/pow_nonce — сервер не раскрывает
+# EXISTS/NOT_FOUND, отвечает CAPTCHA_REQUIRED (в этой итерации PoW требуется
+# всегда, не адаптивно после N попыток — см. README "Известные ограничения").
+POST {{baseUrl}}{{basePath}}/{{service}}/CheckIdentifier
+Content-Type: application/json
+
+{
+  "identifier": "newuser@example.com"
+}
+
+### CheckIdentifier/StartPhoneVerification/StartEmailVerification с решённым
+# PoW, и весь путь после StartPhoneVerification (нужен код из лога — dev-
+# заглушка logSender пишет его туда, а не отправляет реально по SMS/почте,
+# см. internal/modules/identity/dev_senders.go) — НЕЛЬЗЯ выразить статическим
+# запросом. Рабочий пример полного цикла CheckIdentifier → StartPhoneVerification
+# → ConfirmPhoneVerification → StartEmailVerification → ConfirmEmailVerification
+# → CompleteRegistration — в
+# internal/modules/identity/handlers/webapi/v1/registration_test.go
+# (TestRegistrationFlow_EndToEndSucceeds).
+# POST {{baseUrl}}{{basePath}}/{{service}}/StartPhoneVerification
+# POST {{baseUrl}}{{basePath}}/{{service}}/ConfirmPhoneVerification
+# POST {{baseUrl}}{{basePath}}/{{service}}/StartEmailVerification
+# POST {{baseUrl}}{{basePath}}/{{service}}/ConfirmEmailVerification
+# POST {{baseUrl}}{{basePath}}/{{service}}/CompleteRegistration

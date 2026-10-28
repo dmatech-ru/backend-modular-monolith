@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package peer.captcha.v1;
+
+option go_package = "dmatech.ru/internal/modules/captcha/proto/peer/v1/captcha;captchav1";
+
+// CaptchaService — proof-of-work challenge/verify. Namespace "peer", не
+// "webapi": этот контракт не предназначен для гейтвея и внешних HTTP-
+// клиентов, его вызывают только другие модули по NATS напрямую (как
+// gateway.handleProxy вызывает модули — natsrpc.RPCSubject + request/reply,
+// но без участия гейтвея: он про этот сервис не знает и не должен). Namespace
+// назван не "internal" намеренно: сегмент пути "internal" в Go — зарезервированное
+// слово (ограничивает видимость пакета на всё поддерево ОТ родителя этого
+// сегмента), а сгенерированный из этого файла пакет должен быть доступен
+// любому модулю-потребителю (например identity), а не только соседям по
+// internal/pkg/contracts/internal/....
+//
+// Модули друг о друге знают только через buf-контракты, не через прямые
+// Go-импорты: identity импортирует сгенерированные из этого файла типы
+// (captchav1/captchav1connect), а не internal/modules/captcha. Адрес
+// (subject) собирается из имени и версии captcha-сервиса, которые знает
+// вызывающий модуль из своего конфига — отдельный discovery/watch здесь не
+// нужен (в отличие от гейтвея, у которого набор проксируемых сервисов
+// заранее не известен, у identity зависимость на captcha — известная на
+// этапе написания кода, меняется только версия/окружение).
+//
+// Дважды затрудняет перебор: IssueChallenge отдаёт challenge и требуемую
+// сложность (pow_difficulty — число ведущих нулевых бит в SHA-256(challenge
+// || nonce)), подбор nonce стоит CPU-время клиенту; VerifyChallenge одноразов
+// — успешно проверенный (или просроченный) challenge больше не проходит
+// повторно, что не даёт закэшировать один и тот же ответ навсегда.
+service CaptchaService {
+  // IssueChallenge выпускает новый PoW-challenge. difficulty в запросе — 0,
+  // если вызывающий модуль хочет дефолт сервиса; сервис может сам поднять
+  // сложность при повышенной нагрузке/подозрительной активности — поэтому
+  // реальная сложность всегда возвращается явно (echoed_difficulty), а не
+  // предполагается равной запрошенной.
+  rpc IssueChallenge (IssueChallengeRequest) returns (IssueChallengeResponse);
+
+  // VerifyChallenge проверяет решение (nonce) для ранее выданного challenge.
+  // Поведение one-shot: независимо от результата, challenge после этого
+  // вызова больше не валиден (защита от повторного использования решения).
+  rpc VerifyChallenge (VerifyChallengeRequest) returns (VerifyChallengeResponse);
+}
+
+message IssueChallengeRequest {
+  // difficulty — 0 означает "дефолт сервиса".
+  int32 difficulty = 1;
+}
+
+message IssueChallengeResponse {
+  // challenge — непрозрачная случайная строка; возвращается вызывающим
+  // модулем клиенту как есть и приходит обратно в VerifyChallenge.
+  string challenge = 1;
+  // echoed_difficulty — фактическая сложность, под которую выдан challenge
+  // (может быть выше запрошенной — см. комментарий у RPC).
+  int32 echoed_difficulty = 2;
+  // expires_at — unix-время (секунды), после которого challenge недействителен.
+  int64 expires_at = 3;
+}
+
+message VerifyChallengeRequest {
+  string challenge = 1;
+  // nonce — решение, подобранное клиентом:
+  // SHA-256(challenge || nonce) должен иметь echoed_difficulty ведущих нулевых бит.
+  string nonce = 2;
+}
+
+message VerifyChallengeResponse {
+  bool valid = 1;
+}

@@ -3,15 +3,14 @@
 @basePath = /api
 @service = webapi.identity.auth.v1.IdentityAuthService
 
-### Register и CompleteAuthentication НЕЛЬЗЯ выразить статическим запросом:
-# пароль на сервер не передаётся вообще — salt/verifier (Register) и
-# client_public/client_proof (CompleteAuthentication) клиент вычисляет сам
-# настоящей SRP-математикой (см. формулы в internal/pkg/srp/srp.go).
-# Рабочий пример полного цикла Register → InitializeSession →
-# CompleteAuthentication — в
-# internal/modules/identity/handlers/webapi/v1/auth_test.go
-# (registerClientSide, loginAs).
-# POST {{baseUrl}}{{basePath}}/{{service}}/Register
+### CompleteAuthentication НЕЛЬЗЯ выразить статическим запросом: пароль на
+# сервер не передаётся вообще — client_public/client_proof клиент вычисляет
+# сам настоящей SRP-математикой (см. формулы в internal/pkg/srp/srp.go).
+# Регистрация — отдельный, многошаговый контракт (см. identity-registration.http),
+# результат которого (успешный CompleteRegistration) и есть "зарегистрированная
+# учётная запись" для InitializeSession ниже. Рабочий пример полного цикла
+# InitializeSession → CompleteAuthentication — в
+# internal/modules/identity/handlers/webapi/v1/auth_test.go (seedUser, loginAs).
 # POST {{baseUrl}}{{basePath}}/{{service}}/CompleteAuthentication
 
 ### InitializeSession — первый шаг SRP-входа: сервер отвечает salt и своим
@@ -30,7 +29,12 @@ Content-Type: application/json
   "identifier": "admin@admin.local"
 }
 
-### InitializeSession для несуществующего identifier — 404 (CodeNotFound)
+### InitializeSession для несуществующего identifier — анти-перечисление:
+# ответ 200 с тем же набором полей, что у настоящего аккаунта (детерминированные
+# фейковые salt/server_public, см. srp.FakeCredentials); отличить от
+# существующего по этому ответу невозможно — отличить помогает только
+# IdentityRegistrationService.CheckIdentifier (см. identity-registration.http),
+# который раскрывает существование намеренно и для другой цели.
 POST {{baseUrl}}{{basePath}}/{{service}}/InitializeSession
 Content-Type: application/json
 

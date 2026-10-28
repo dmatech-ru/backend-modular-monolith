@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package peer.notifications.v1;
+
+option go_package = "dmatech.ru/internal/modules/notifications/proto/peer/v1/notifications;notificationsv1";
+
+import "webapi/v1/delivery/delivery.proto";
+
+// NotificationService — единственный способ отправить сообщение по одному
+// из webapi.delivery.v1.DeliveryChannel. Только peer, без webapi: это не
+// браузерный контракт — его вызывают другие модули по NATS напрямую (как
+// identity вызывает peer.captcha.v1.CaptchaService, см. комментарий там и
+// internal/pkg/natsrpc.Client). Сегодня единственный ожидаемый вызывающий —
+// identity (коды для StartPhoneVerification/StartEmailVerification и
+// IdentityRecoveryService.SendRecoveryCode вместо текущей dev-заглушки
+// logSender), но контракт не завязан на identity — любой будущий модуль,
+// которому нужно "отправить что-то куда-то", зовёт его так же.
+//
+// destination — не "адрес канала", а контакт пользователя, тот же для
+// соответствующего канала, что хранит identity.auth:
+//   - DELIVERY_CHANNEL_EMAIL — email;
+//   - DELIVERY_CHANNEL_SMS — телефон;
+//   - DELIVERY_CHANNEL_TELEGRAM/DELIVERY_CHANNEL_MAX — тоже телефон, а не
+//     chat_id: это модуль notifications сам резолвит в чат (пользователь
+//     делится номером с ботом, см. комментарий IdentityRecoveryService в
+//     identity/recovery.proto) — вызывающий код этой механики не видит и
+//     не должен.
+// Отправка синхронна: Send либо доставляет (или хотя бы принимает на
+// доставку у провайдера), либо возвращает ошибку сразу — NOT_FOUND, если
+// для DELIVERY_CHANNEL_TELEGRAM/DELIVERY_CHANNEL_MAX чат для этого номера
+// ещё не резолвился (пользователь не писал боту), INVALID_ARGUMENT —
+// некорректный destination для канала, INTERNAL — отказ провайдера
+// (SMS-гейтвей, почтовый релей и т.п.).
+service NotificationService {
+  rpc Send (SendRequest) returns (SendResponse);
+}
+
+message SendRequest {
+  webapi.delivery.v1.DeliveryChannel channel = 1;
+  string destination = 2;
+  // subject — заголовок; для каналов без заголовка (SMS, Telegram, MAX)
+  // игнорируется либо используется как первая строка сообщения — на
+  // усмотрение реализации конкретного провайдера.
+  string subject = 3;
+  string body = 4;
+}
+
+message SendResponse {}

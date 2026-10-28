@@ -4,6 +4,11 @@ package webapi.identity.auth.v1;
 
 option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity;authv1";
 
+// IdentityAuthService — только SRP-вход для уже существующих аккаунтов.
+// Регистрация — отдельный, многошаговый контракт, см.
+// IdentityRegistrationService в registration.proto того же пакета (бывший
+// одношаговый Register здесь заменён её CompleteRegistration: он не
+// проверял владение телефоном/почтой вообще).
 service IdentityAuthService {
   // InitializeSession начинает вход по identifier (email или телефон) и
   // возвращает параметры SRP-обмена (соль и публичное значение сервера) для
@@ -16,12 +21,6 @@ service IdentityAuthService {
   // доказательство (server_proof) для взаимной аутентификации. Session_id
   // одноразовый: повторный вызов с тем же значением вернёт NOT_FOUND.
   rpc CompleteAuthentication (CompleteAuthenticationRequest) returns (CompleteAuthenticationResponse);
-
-  // Register создаёт учётную запись. Пароль на сервер никогда не
-  // передаётся: salt и verifier клиент вычисляет локально (см. формулы в
-  // internal/pkg/srp) и присылает уже готовыми — доверие к транспорту не
-  // входит в модель угроз этого контракта.
-  rpc Register (RegisterRequest) returns (RegisterResponse);
 }
 
 message InitializeSessionRequest {
@@ -49,21 +48,4 @@ message CompleteAuthenticationResponse {
   // server_proof — доказательство сервера (M2): клиент проверяет его, чтобы
   // убедиться, что говорит с сервером, который действительно знает verifier.
   bytes server_proof = 1;
-}
-
-message RegisterRequest {
-  // identifier — email или телефон; тип определяется по формату строки.
-  string identifier = 1;
-  // salt — соль, выбранная клиентом для этого пользователя.
-  bytes salt = 2;
-  // verifier — v = g^x mod N, вычислен клиентом из salt/identifier/пароля
-  // (см. srp.ComputeVerifier). Пароль в этом запросе не передаётся.
-  bytes verifier = 3;
-  string first_name = 4;
-  string last_name = 5;
-  string middle_name = 6;
-}
-
-message RegisterResponse {
-  string user_id = 1;
 }

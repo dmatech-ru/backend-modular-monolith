@@ -40,6 +40,14 @@ func serve(s *server, method, target string, body io.Reader) *httptest.ResponseR
 	return rec
 }
 
+func serveFromIP(s *server, remoteAddr, method, target string, body io.Reader) *httptest.ResponseRecorder {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(method, target, body)
+	req.RemoteAddr = remoteAddr
+	s.Handler().ServeHTTP(rec, req)
+	return rec
+}
+
 func identityDescriptor(t *testing.T) []byte {
 	t.Helper()
 	descriptor, err := protoset.Build(authv1.File_webapi_v1_identity_auth_proto)
@@ -278,5 +286,106 @@ func TestHandleProxy_NoResponders(t *testing.T) {
 
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503, body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleProxy_RateLimited(t *testing.T) {
+	nc := connectTestNATS(t)
+
+	s, routes := testServer(HttpConfig{
+		BaseUrl:             "/api",
+		ProxyRequestTimeout: time.Second,
+		RateLimitRPS:        1,
+		RateLimitBurst:      1,
+	}, nc)
+	routes.Apply(natsdiscovery.RouteUpdate{ServiceName: "identity", Version: "1_0_0", Descriptor: identityDescriptor(t)})
+
+	const methodPath = "/webapi.identity.auth.v1.IdentityAuthService/InitializeSession"
+	subject := natsrpc.RPCSubject(testEnv, "identity", "1_0_0", methodPath)
+
+	sub, err := nc.Subscribe(subject, func(msg *nats.Msg) {
+		reply := nats.NewMsg(msg.Reply)
+		reply.Header.Set(natsrpc.RPCStatusHeader, "200")
+		_ = msg.RespondMsg(reply)
+	})
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Unsubscribe()
+
+	first := serve(s, http.MethodPost, "/api"+methodPath, nil)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first request (within burst) = %d, want 200, body=%q", first.Code, first.Body.String())
+	}
+
+	second := serve(s, http.MethodPost, "/api"+methodPath, nil)
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second request (burst exhausted) = %d, want 429, body=%q", second.Code, second.Body.String())
+	}
+}
+
+// Сквозная проверка (через настоящий handleProxy, не напрямую methodGuard):
+// лимит по IP не задевает другого клиента, даже если первый его выжёг.
+func TestHandleProxy_RateLimitIsPerClientIP(t *testing.T) {
+	nc := connectTestNATS(t)
+
+	s, routes := testServer(HttpConfig{
+		BaseUrl:             "/api",
+		ProxyRequestTimeout: time.Second,
+		RateLimitRPS:        1,
+		RateLimitBurst:      1,
+	}, nc)
+	routes.Apply(natsdiscovery.RouteUpdate{ServiceName: "identity", Version: "1_0_0", Descriptor: identityDescriptor(t)})
+
+	const methodPath = "/webapi.identity.auth.v1.IdentityAuthService/InitializeSession"
+	subject := natsrpc.RPCSubject(testEnv, "identity", "1_0_0", methodPath)
+
+	sub, err := nc.Subscribe(subject, func(msg *nats.Msg) {
+		reply := nats.NewMsg(msg.Reply)
+		reply.Header.Set(natsrpc.RPCStatusHeader, "200")
+		_ = msg.RespondMsg(reply)
+	})
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Unsubscribe()
+
+	clientA1 := serveFromIP(s, "203.0.113.1:1111", http.MethodPost, "/api"+methodPath, nil)
+	if clientA1.Code != http.StatusOK {
+		t.Fatalf("client A, first request = %d, want 200", clientA1.Code)
+	}
+	clientA2 := serveFromIP(s, "203.0.113.1:2222", http.MethodPost, "/api"+methodPath, nil)
+	if clientA2.Code != http.StatusTooManyRequests {
+		t.Fatalf("client A, second request (burst exhausted, different port same IP) = %d, want 429", clientA2.Code)
+	}
+
+	clientB := serveFromIP(s, "203.0.113.2:3333", http.MethodPost, "/api"+methodPath, nil)
+	if clientB.Code != http.StatusOK {
+		t.Fatalf("client B (different IP) = %d, want 200 (must not be throttled by client A)", clientB.Code)
+	}
+}
+
+func TestHandleProxy_CircuitBreakerOpensAfterTransportFailures(t *testing.T) {
+	nc := connectTestNATS(t)
+
+	s, routes := testServer(HttpConfig{
+		BaseUrl:                 "/api",
+		ProxyRequestTimeout:     time.Second,
+		CircuitBreakerThreshold: 1,
+		CircuitBreakerCooldown:  time.Minute,
+	}, nc)
+	routes.Apply(natsdiscovery.RouteUpdate{ServiceName: "identity", Version: "1_0_0", Descriptor: identityDescriptor(t)})
+
+	// Без подписчика на subject: каждый запрос получает nats.ErrNoResponders.
+	const methodPath = "/webapi.identity.auth.v1.IdentityAuthService/InitializeSession"
+
+	first := serve(s, http.MethodPost, "/api"+methodPath, nil)
+	if first.Code != http.StatusServiceUnavailable || !strings.Contains(first.Body.String(), "unavailable") {
+		t.Fatalf("first request = %d %q, want 503 (no responders)", first.Code, first.Body.String())
+	}
+
+	second := serve(s, http.MethodPost, "/api"+methodPath, nil)
+	if second.Code != http.StatusServiceUnavailable || !strings.Contains(second.Body.String(), "circuit open") {
+		t.Fatalf("second request = %d %q, want 503 rejected by the breaker (not a second NATS round trip)", second.Code, second.Body.String())
 	}
 }

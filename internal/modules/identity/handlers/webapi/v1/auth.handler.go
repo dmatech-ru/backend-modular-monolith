@@ -2,16 +2,29 @@ package v1
 
 import (
 	"log/slog"
+	"net/http"
 
 	"github.com/nats-io/nats.go"
 
 	"dmatech.ru/internal/pkg/natsrpc"
 )
 
-// Subscribe подписывает IdentityAuthService на входящие запросы через NATS:
-// связывает HTTP-обработчик (см. auth.go) с транспортом natsrpc.ServeHandler,
-// чтобы гейтвей мог достучаться до него по маршруту {env}.{serviceName}.{version}.
-func Subscribe(nc *nats.Conn, log *slog.Logger, env, serviceName, version string, repo Repository, antiEnumKey []byte) (*natsrpc.RPCSubscription, error) {
-	_, handler := NewHandler(repo, antiEnumKey)
-	return natsrpc.ServeHandler(nc, log, env, serviceName, version, handler)
+// Subscribe подписывает IdentityAuthService и IdentityRegistrationService на
+// входящие запросы через NATS: один общий mux, одна подписка на весь модуль
+// (методы различает путь запроса — коллизий между сервисами нет), чтобы
+// гейтвей мог достучаться до них по маршруту {env}.{serviceName}.{version}.
+func Subscribe(
+	nc *nats.Conn, log *slog.Logger, env, serviceName, version string,
+	repo Repository, antiEnumKey []byte,
+	regRepo RegistrationRepository, captcha CaptchaClient, phones PhoneSender, emails EmailSender,
+) (*natsrpc.RPCSubscription, error) {
+	mux := http.NewServeMux()
+
+	authPath, authHandler := NewHandler(repo, antiEnumKey)
+	mux.Handle(authPath, authHandler)
+
+	registrationPath, registrationHandler := NewRegistrationServiceHandler(regRepo, captcha, phones, emails)
+	mux.Handle(registrationPath, registrationHandler)
+
+	return natsrpc.ServeHandler(nc, log, env, serviceName, version, mux)
 }

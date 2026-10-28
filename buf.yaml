@@ -2,6 +2,8 @@ version: v2
 modules:
   - path: internal/pkg/proto
   - path: internal/modules/identity/proto
+  - path: internal/modules/captcha/proto
+  - path: internal/modules/notifications/proto
 deps:
   - buf.build/bufbuild/protovalidate
 

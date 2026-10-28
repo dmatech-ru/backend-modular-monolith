@@ -43,15 +43,15 @@ type AuthRecord struct {
 	Verifier []byte
 }
 
-// FindAuth ищет учётную запись по identifier (email или телефон,
-// регистронезависимо для email). Возвращает ErrNotFound, если запись не
-// найдена или для неё ещё не настроен SRP (легаси-аккаунт без salt/verifier).
+// FindAuth ищет учётную запись по identifier (email, телефон или username —
+// email/username регистронезависимо). Возвращает ErrNotFound, если запись
+// не найдена или для неё ещё не настроен SRP (легаси-аккаунт без salt/verifier).
 func (r *Repository) FindAuth(ctx context.Context, identifier string) (AuthRecord, error) {
 	var rec AuthRecord
 	err := r.pool.QueryRow(ctx,
 		`SELECT user_id::text, srp_salt, srp_verifier
 		 FROM identity.auth
-		 WHERE lower(email) = lower($1) OR phone = $1`,
+		 WHERE lower(email) = lower($1) OR phone = $1 OR lower(username) = lower($1)`,
 		identifier,
 	).Scan(&rec.UserID, &rec.Salt, &rec.Verifier)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -121,65 +121,6 @@ func (r *Repository) ConsumeChallenge(ctx context.Context, challengeID string) (
 		return ChallengeRecord{}, fmt.Errorf("consume challenge: %w", err)
 	}
 	return rec, nil
-}
-
-// CreateUserParams — данные для регистрации нового пользователя. Salt и
-// Verifier вычислены клиентом (сервер пароль не видит); ровно одно из
-// Email/Phone должно быть заполнено.
-type CreateUserParams struct {
-	Email, Phone                    string
-	Salt, Verifier                  []byte
-	FirstName, LastName, MiddleName string
-}
-
-// CreateUser создаёт пользователя, профиль и запись SRP-аутентификации
-// одной транзакцией. Новый пользователь получает статус 'pending' (значение
-// по умолчанию в identity.users) — активация/подтверждение identifier'а не
-// входит в эту функцию. Возвращает ErrAlreadyExists при конфликте email/телефона.
-func (r *Repository) CreateUser(ctx context.Context, p CreateUserParams) (string, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return "", fmt.Errorf("create user: %w", err)
-	}
-	defer func() { _ = tx.Rollback(context.Background()) }()
-
-	var userID string
-	if err := tx.QueryRow(ctx,
-		`INSERT INTO identity.users DEFAULT VALUES RETURNING id::text`,
-	).Scan(&userID); err != nil {
-		return "", fmt.Errorf("create user: %w", err)
-	}
-
-	if _, err := tx.Exec(ctx,
-		`INSERT INTO identity.profiles (user_id, first_name, last_name, middle_name)
-		 VALUES ($1::uuid, $2, $3, $4)`,
-		userID, p.FirstName, p.LastName, p.MiddleName,
-	); err != nil {
-		return "", fmt.Errorf("create profile: %w", err)
-	}
-
-	var email, phone *string
-	if p.Email != "" {
-		email = &p.Email
-	}
-	if p.Phone != "" {
-		phone = &p.Phone
-	}
-	if _, err := tx.Exec(ctx,
-		`INSERT INTO identity.auth (user_id, email, phone, srp_salt, srp_verifier)
-		 VALUES ($1::uuid, $2, $3, $4, $5)`,
-		userID, email, phone, p.Salt, p.Verifier,
-	); err != nil {
-		if isUniqueViolation(err) {
-			return "", ErrAlreadyExists
-		}
-		return "", fmt.Errorf("create auth: %w", err)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return "", fmt.Errorf("create user: %w", err)
-	}
-	return userID, nil
 }
 
 func isUniqueViolation(err error) bool {

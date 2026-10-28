@@ -6,7 +6,7 @@
 
 Взаимодействие модулей и динамического шлюза (Gateway) построено на **Protobuf-дескрипторах** и реактивном **Service Discovery поверх NATS JetStream KV**.
 
-> Статус: каркас. Discovery, жизненный цикл, HTTP-сервер шлюза, proxy-мост HTTP↔NATS и SRP-аутентификация identity (Register / InitializeSession / CompleteAuthentication) поверх PostgreSQL работают целиком. Миграции и сиды применяются отдельным разовым прогоном (`cmd/setup`), не при старте реплики.
+> Статус: каркас. Discovery, жизненный цикл, HTTP-сервер шлюза, proxy-мост HTTP↔NATS, SRP-вход identity (InitializeSession / CompleteAuthentication), многошаговая регистрация с подтверждением телефона/email (IdentityRegistrationService) и модуль captcha (proof-of-work, первый пример вызова одного модуля другим напрямую по NATS) поверх PostgreSQL работают целиком. Миграции и сиды применяются отдельным разовым прогоном (`cmd/setup`), не при старте реплики.
 
 ---
 
@@ -38,6 +38,31 @@ NATS-инфраструктура разнесена по трём незави�
 * Подписывается на маршруты через `natsdiscovery.WatchRoutes` (бакет создаётся сам — порядок старта модулей не важен) и держит их в таблице в памяти, дополнительно разбирая дескриптор (`protobuf.FileDescriptorSet`) на полные имена gRPC/Connect-сервисов — так строится индекс `сервис → владеющий модуль`.
 * HTTP-сервер (пакет `internal/pkg/httpserver`, переиспользуемый и модулями) с таймаутами, лимитами заголовков/тела/конкурентности, опциональным TLS и плавной остановкой (`shutdownDelay`).
 * Эндпоинты: `GET /healthz`, `GET /readyz`, `GET {baseURL}/_routes` (известные маршруты). Остальные пути под `{baseURL}/{package.Service}/{Method}` пересылаются владеющему модулю через NATS request-reply (`natsrpc.RPCSubject`) и ждут ответа не дольше `proxyRequestTimeout` (отдельного от `requestTimeout` статических эндпоинтов); без подписчика на subject'е клиент получает `503`.
+* **Rate limiter и circuit breaker** (`methodGuard`, `internal/modules/gateway/resilience.go`), выключены по умолчанию (`rateLimitRps`/`circuitBreakerThreshold` = 0). У них разные ключи, и это осознанно — это защита от разных угроз, не одна и та же фича с двумя именами:
+  - **Лимитер — token bucket на `(IP клиента, {package.Service}/{Method})`** (`rateLimitRps`/`rateLimitBurst`): превышение — `429` без похода в NATS. Ключ включает IP, чтобы один агрессивный клиент не мог съесть общий бюджет метода и заблокировать остальных (защита от L7-абьюза/DDoS на уровне приложения). IP берётся из `r.RemoteAddr`, если явно не включено `trustProxyHeaders` (доверять `X-Forwarded-For`/`X-Real-IP`) — включать только если гейтвей реально стоит за доверенным реверс-прокси, иначе клиент тривиально обходит лимит, подделывая заголовок. Настоящий volumetric DDoS (флуд на уровне сети) этим не остановить — это не задача приложения, нужна инфраструктура перед сервером (CDN/WAF).
+  - **Брейкер — общий на `{package.Service}/{Method}`, без IP** — после `circuitBreakerThreshold` подряд отказов *транспорта* (NATS no-responders/таймаут; бизнес-ошибки сервиса не считаются) открывается на `circuitBreakerCooldown`, дальше сразу `503` без попытки достучаться до NATS; затем одна пробная (half-open) попытка решает, закрыть автомат или продлить охлаждение. Он защищает сам NATS/бэкенд, когда тот уже не отвечает, — если бы он тоже был per-IP, при реальном отказе сервиса каждый новый клиент продолжал бы безнаказанно долбить мёртвый NATS.
+  - Оба ключа — из запроса, то есть под контролем клиента: неактивные записи периодически выметаются, иначе атакующий мог бы раздувать карту сотнями несуществующих методов/IP.
+
+### 5. Вызов модуля из модуля (пакеты `pow`, `natsrpc.Client`, модуль `captcha`)
+Первый в проекте пример, когда один бизнес-модуль вызывает другой напрямую по NATS, а не через гейтвей — и образец на будущее, как это делать:
+* **`internal/pkg/pow`** — proof-of-work (hashcash-подобный) без внешних зависимостей: `SHA-256(challenge‖nonce)` с нужным числом ведущих нулевых бит. Чистая математика, как `srp`; выдачу challenge'ей и их хранение делает модуль `captcha`.
+* **Модуль `captcha`** публикует **два** proto-контракта из одного и того же `internal/modules/captcha/proto/`:
+  - `webapi/v1/captcha` (пакет `webapi.captcha.v1`) — публичный: только `IssueChallenge`, браузер зовёт его через гейтвей как любой другой webapi-метод.
+  - `peer/v1/captcha` (пакет `peer.captcha.v1`) — `IssueChallenge` + `VerifyChallenge`, только для вызова другими модулями по NATS. В discovery (`protoset.Build`) попадает **только** webapi-файл — гейтвей физически не узнаёт о существовании `peer.captcha.v1.CaptchaService` и не сможет его проксировать, даже по ошибке. (Назван `peer`, не `internal`: сегмент пути `internal` — зарезервированное слово в Go, ограничивающее видимость пакета.)
+  - Выданные challenge'и живут в NATS JetStream KV с TTL на бакет (`captcha_challenges`) — истечение и one-shot (удаление при `VerifyChallenge`) не нуждаются в отдельной фоновой задаче.
+* **`internal/pkg/natsrpc.Client`** — `connect.HTTPClient` поверх NATS request-reply (тот же протокол, которым `ServeHandler` принимает запросы на стороне модуля), симметричный клиент к тому, что уже умел `ServeHandler`. Позволяет identity вызывать `peer.captcha.v1.CaptchaService` обычным сгенерированным connect-клиентом, зная только buf-контракт captcha и её имя/версию из своего конфига (`captchaServiceName`/`captchaServiceVersion`) — без прямого Go-импорта `internal/modules/captcha` и без discovery/watch: в отличие от гейтвея (набор проксируемых модулей заранее не известен), у identity зависимость на captcha известна на этапе написания кода.
+
+### 6. Очередь задач поверх NATS JetStream (пакет `mq`, модуль `notifications`), а не отдельный брокер
+`notifications` — ещё один чисто `peer`-модуль (`internal/modules/notifications/proto/peer/v1/notifications`, без webapi-файла вообще — гейтвею здесь физически нечего проксировать): единая точка отправки сообщения по каналу из `webapi.delivery.v1.DeliveryChannel` (email/SMS/Telegram/MAX), `destination` — контакт пользователя (email/телефон), не `chat_id` — для Telegram/MAX модуль сам резолвит чат (см. doc-комментарий `NotificationService`).
+
+Для самой очереди осознанно **не** взят отдельный брокер (RabbitMQ и т.п.): NATS уже обязательная инфраструктура для каждого модуля, а JetStream даёт ровно ту же семантику "очереди задач с retry", только без второго контейнера/клиента/набора отказов на мониторинг:
+* **`internal/pkg/mq`** — тонкий коннектор: `EnsureStream` (стрим с `WorkQueuePolicy` — сообщение покидает стрим после подтверждения, это очередь задач, не журнал событий), `Publish`, `StartConsumer` (durable pull-консьюмер, `ConsumerOptions{Durable, MaxDeliver, FilterSubject}`: ошибка `Handler` → `Nak` → JetStream сам повторит доставку, до `MaxDeliver` раз).
+* **Namespace и разбивка по каналу:** subject — `{env}.notifications.{channel}` (`email`/`sms`/`telegram`/`max`, см. `channelSubject`/`channelToken` в `subjects.go`), один стрим на окружение с `Subjects: ["{env}.notifications.*"]`, но **отдельный durable-консьюмер на канал** (`FilterSubject` на свой subject). Так недоступный Telegram Bot API не блокирует обработку email, и разные окружения на одном NATS-кластере не пересекаются.
+* `NotificationService.Send` кладёт сообщение в очередь своего канала и отвечает сразу — это подтверждение *постановки в очередь*, не реальной доставки: провайдер (SMTP/Telegram Bot API) может быть временно недоступен, и это не должно блокировать вызывающий код (например, `IdentityRegistrationService.StartPhoneVerification`) или терять сообщение.
+* **`internal/modules/notifications/sender`** — один тип на канал за интерфейсом `Sender`:
+  - `EmailSender` — реальный SMTP relay (`net/smtp`, без сторонних зависимостей); `destination`/`subject` проверяются на `\r\n` перед сборкой заголовков — иначе было бы возможно SMTP header injection (например, подсунуть лишний `Bcc`).
+  - `TelegramSender` — реальный вызов Telegram Bot API (`sendMessage`). `destination` — телефон, не `chat_id`: резолвинг телефон→чат идёт через `ChatResolver`, единственная реализация которого (`unresolvedChatResolver`) сейчас всегда отвечает "не резолвится" — отправка технически готова, но реально сработает только после вебхука, принимающего от Telegram событие "пользователь поделился контактом с ботом" (не реализован в этой итерации).
+  - `LogSender` — дефолт для SMS/MAX (нет интеграции) и фоллбэк для email/Telegram, если провайдер не сконфигурирован (`email.host`/`telegram.botToken` пусты в конфиге) — пишет в лог вместо реальной отправки, как `identity`'s `logSender`.
 
 ---
 
@@ -52,25 +77,30 @@ NATS-инфраструктура разнесена по трём незави�
 ├── configs/             # YAML-конфигурации модулей
 ├── internal/
 │   ├── modules/
+│   │   ├── captcha/     # Proof-of-work: webapi (IssueChallenge) + peer (+VerifyChallenge) контракты, KV-хранилище challenge'ей
 │   │   ├── gateway/     # Реактивный шлюз (HTTP + таблица маршрутов)
-│   │   └── identity/    # Модуль аутентификации (SRP + PostgreSQL, регистрируется в discovery)
-│   │       ├── migrations/ # SQL-миграции схемы identity (go:embed)
-│   │       ├── repository/ # Репозиторий identity поверх PostgreSQL (auth, challenges, users)
-│   │       └── setup.go    # Миграции + сиды identity, вызывается из cmd/setup (не из initialization)
+│   │   ├── identity/    # Модуль аутентификации (SRP + PostgreSQL, регистрируется в discovery)
+│   │   │   ├── migrations/ # SQL-миграции схемы identity (go:embed)
+│   │   │   ├── repository/ # Репозиторий identity поверх PostgreSQL (auth, challenges, users, регистрация)
+│   │   │   └── setup.go    # Миграции + сиды identity, вызывается из cmd/setup (не из initialization)
+│   │   └── notifications/ # Peer-только: очередь отправки (email/SMS/Telegram/MAX) поверх NATS JetStream
+│   │       └── sender/     # Sender на канал: EmailSender (SMTP), TelegramSender (Bot API), LogSender (dev-заглушка)
 │   └── pkg/
 │       ├── config/        # Дженерик-загрузчик конфигураций (YAML + env)
 │       ├── httpserver/     # Переиспользуемый HTTP-сервер (таймауты, лимиты, graceful shutdown)
 │       ├── logger/        # ColorHandler для slog (dev) / JSON (production)
 │       ├── minio/         # Подключение к MinIO/S3 и сидирование файловых ассетов (пока не подключён ни к одному модулю)
+│       ├── mq/            # Durable work-queue поверх NATS JetStream (стримы + pull-консьюмеры с retry)
 │       ├── natsconn/      # Подключение к NATS и Drain при остановке
 │       ├── natsdiscovery/ # Service discovery поверх NATS JetStream KV
-│       ├── natsrpc/       # RPC-транспорт поверх NATS (subject'ы, мост HTTP↔NATS)
+│       ├── natsrpc/       # RPC-транспорт поверх NATS: сервер (ServeHandler) и клиент (Client) для вызовов между модулями
 │       ├── postgres/      # Подключение к PostgreSQL, миграции и сиды схемы модуля
+│       ├── pow/           # Proof-of-work challenge/verify (hashcash-подобный), без внешних зависимостей
 │       ├── protoset/      # Сборка protobuf.FileDescriptorSet из дескриптора + импортов
 │       ├── srp/           # SRP-6a: серверная и клиентская математика (RFC 5054, SHA-256)
 │       ├── service/       # Реестр модулей рантайма, хуки остановки, общие зависимости
 │       └── setup/         # Реестр одноразовых задач подготовки окружения (миграции/сиды) для cmd/setup
-├── rest-examples/       # Примеры HTTP-запросов (humao.rest-client) к gateway/identity
+├── rest-examples/       # Примеры HTTP-запросов (humao.rest-client) к gateway/identity/captcha
 ├── seeds/               # SQL-сиды и файловые ассеты модулей (см. seeds/README.md), в бинарь не упаковываются
 ├── Dockerfile
 ├── docker-compose.yaml  # NATS с JetStream + PostgreSQL (+ приложение в профиле app)
@@ -99,11 +129,18 @@ NATS-инфраструктура разнесена по трём незави�
 | `LOG_LEVEL` | `info` | Уровень логов bootstrap |
 | `SHUTDOWN_TIMEOUT` | `15s` | Общий таймаут плавной остановки |
 | `APP_ENV` | — | `production` включает JSON-логи |
-| `GATEWAY_CONFIG_PATH`, `IDENTITY_CONFIG_PATH` | — | Пути к YAML модулей; переменные `GATEWAY_*` / `IDENTITY_*` перекрывают значения из файла |
+| `GATEWAY_CONFIG_PATH`, `IDENTITY_CONFIG_PATH`, `CAPTCHA_CONFIG_PATH`, `NOTIFICATIONS_CONFIG_PATH` | — | Пути к YAML модулей; переменные `GATEWAY_*` / `IDENTITY_*` / `CAPTCHA_*` / `NOTIFICATIONS_*` перекрывают значения из файла |
 | `IDENTITY_POSTGRES_URL` | из `configs/identity.yaml` | DSN PostgreSQL для identity, схема `identity` |
 | `IDENTITY_SEEDS_DB` | из `configs/identity.yaml` (`seeds.db`) | Каталог SQL-сидов identity для `cmd/setup` |
 | `IDENTITY_SEEDS_LEVELS` | из `configs/identity.yaml` (`seeds.levels`) | Уровни сидов по порядку применения, через запятую (например `shared,development`) |
 | `IDENTITY_ANTI_ENUM_KEY` | из `configs/identity.yaml` | Hex-секрет (≥32 байта) для `srp.FakeCredentials` — защита `InitializeSession` от перечисления аккаунтов; должен совпадать на всех репликах |
+| `IDENTITY_CAPTCHA_SERVICE_NAME`, `IDENTITY_CAPTCHA_SERVICE_VERSION` | `captcha-service`, `0.0.0` | Имя/версия captcha-модуля для вызова `peer.captcha.v1.CaptchaService` по NATS (должны совпадать с `serviceName`/`appVersion` в `configs/captcha.yaml`) |
+| `CAPTCHA_DEFAULT_DIFFICULTY` | из `configs/captcha.yaml` | Сложность PoW по умолчанию (число ведущих нулевых бит) для `webapi.captcha.v1.CaptchaService.IssueChallenge` |
+| `CAPTCHA_CHALLENGE_TTL` | из `configs/captcha.yaml` | Срок жизни выданного challenge'а |
+| `NOTIFICATIONS_STREAM_NAME` | из `configs/notifications.yaml` | Имя JetStream work-queue стрима очереди отправки |
+| `NOTIFICATIONS_MAX_DELIVER` | из `configs/notifications.yaml` | Сколько раз повторить попытку доставки одного сообщения, прежде чем JetStream перестанет пытаться |
+| `NOTIFICATIONS_EMAIL_SMTP_HOST`, `_PORT`, `_USERNAME`, `_PASSWORD`, `NOTIFICATIONS_EMAIL_FROM` | — | Настройки SMTP relay; пустой `HOST` — email идёт в `LogSender`, а не отправляется реально |
+| `NOTIFICATIONS_TELEGRAM_BOT_TOKEN` | — | Токен Telegram Bot API; пусто — Telegram идёт в `LogSender` |
 
 Пример — в `.env.example` (Makefile подхватывает `.env` автоматически).
 
@@ -171,14 +208,45 @@ func initialization(ctx context.Context) error {
 
 ---
 
+## 📈 Если потребуется больший масштаб
+
+Текущая схема публикует `FileDescriptorSet` в NATS KV **на ключ модуля**
+(`{env}.{service}.{version}`, см. `protoset.Build` и п.3) — размер зависит
+от proto-сёрфейса конкретного модуля, а не от суммарного числа RPC во всей
+системе: 1000 методов, размазанные по полусотне модулей, — это десятки-сотни
+КБ на ключ, не один гигантский блоб. Для умеренного числа модулей умеренного
+размера (типичный модульный монолит) это нормально работает в лимитах NATS
+JetStream KV по умолчанию.
+
+Если один модуль разрастётся до огромного proto-сёрфейса (или дескрипторы
+понадобятся внешним потребителям, не только этому гейтвею), правильный
+следующий шаг — не заливать бинарники дескрипторов в MinIO/S3 самодельным
+кодом (версионирование, инвалидация кэша, авторизация к бакету — всё ручное
+и чужое для домена), а подключить настоящий **Buf Schema Registry** (свой
+инстанс или buf.build): он уже умеет версионирование, compatibility-checks и
+резолвинг зависимостей между командами. NATS KV при этом продолжает хранить
+только лёгкий список маршрутов (`сервис.Method → модуль`), а не сами
+дескрипторы.
+
+---
+
 ## Известные ограничения
 
-* Гейтвей находит владеющий модуль по дескриптору и пересылает запрос через NATS (`{env}.{serviceName}.{version}.rpc.{methodPath}`, см. `natsrpc.RPCSubject`/`natsrpc.ServeHandler`); `identity` подписан через `authhandler.Subscribe` (`internal/modules/identity/handlers/webapi/v1/auth.handler.go`) и реально отвечает.
-* **SRP-аутентификация identity** (`internal/pkg/srp`, группа 2048 бит из RFC 5054 Appendix A.3 с SHA-256 вместо SHA-1 — своя схема, совместимость с внешними SRP-клиентами не требовалась): `Register` → `InitializeSession` → `CompleteAuthentication`. Пароль не передаётся на сервер ни разу, в том числе при регистрации — TLS не входит в модель угроз: `Register` принимает уже готовые `salt`/`verifier`, вычисленные клиентом (`srp.GenerateSalt` + `srp.ComputeVerifier`), сервер их только проверяет по форме (`srp.ValidVerifier`) и хранит. `InitializeSession` защищён от перечисления аккаунтов: для несуществующего identifier сервер без обращения к базе отвечает детерминированными фейковыми `salt`/`verifier` (`srp.FakeCredentials`, ключ — `antiEnumerationKey`), неотличимыми по форме и коду ответа от настоящего аккаунта; пройти второй шаг с ними невозможно ни при каком пароле. Challenge'и второго шага (`identity.auth_challenges`) чистятся попутно при каждой новой `InitializeSession` (не нужна отдельная фоновая задача). Осознанное упрощение, о котором нужно знать:
-  - Новый пользователь получает статус `pending` (значение по умолчанию) — ничего пока не переводит его в `active`, подтверждения email/телефона нет, хотя колонка `email_verified` под это уже есть.
+* Гейтвей находит владеющий модуль по дескриптору и пересылает запрос через NATS (`{env}.{serviceName}.{version}.rpc.{methodPath}`, см. `natsrpc.RPCSubject`/`natsrpc.ServeHandler`); `identity` (`IdentityAuthService` + `IdentityRegistrationService`, один общий mux и одна подписка, см. `authhandler.Subscribe`) и `captcha` подписаны и реально отвечают.
+* **SRP-вход identity** (`internal/pkg/srp`, группа 2048 бит из RFC 5054 Appendix A.3 с SHA-256 вместо SHA-1 — своя схема, совместимость с внешними SRP-клиентами не требовалась): `InitializeSession` → `CompleteAuthentication`. Пароль не передаётся на сервер ни разу — сервер хранит только `salt`/`verifier`, вычисленные клиентом. `InitializeSession` защищён от перечисления аккаунтов: для несуществующего identifier сервер без обращения к базе отвечает детерминированными фейковыми `salt`/`verifier` (`srp.FakeCredentials`, ключ — `antiEnumerationKey`), неотличимыми по форме и коду ответа от настоящего аккаунта; пройти второй шаг с ними невозможно ни при каком пароле. Challenge'и второго шага (`identity.auth_challenges`) чистятся попутно при каждой новой `InitializeSession` (не нужна отдельная фоновая задача).
+* **Регистрация** (`IdentityRegistrationService`, `registration.proto`) — многошаговая: `CheckIdentifier` → `StartPhoneVerification` (телефон + согласие на обработку персональных данных, 152-ФЗ) → `ConfirmPhoneVerification` → `StartEmailVerification` → `ConfirmEmailVerification` → `CompleteRegistration` (пароль — как и раньше, `salt`/`verifier` с клиента). Коды подтверждения хранятся только хешем (SHA-256), лимит попыток на код — 5 (`RESOURCE_EXHAUSTED` дальше), сессия регистрации — в `identity.registration_sessions` с общим TTL 30 минут. Осознанные упрощения:
+  - `CheckIdentifier`, в отличие от `InitializeSession`, **намеренно** раскрывает, существует ли аккаунт — это нужно, чтобы решить "вести на вход или на регистрацию". Ограничено рейт-лимитом гейтвея (`methodGuard`) и PoW-защитой (см. ниже), но это осознанный трейд-офф UX/приватность, а не недосмотр.
+  - PoW (`captcha_client.go`, модуль `captcha`) требуется **всегда** на `CheckIdentifier`/`StartPhoneVerification`/`StartEmailVerification`, а не адаптивно после N неудачных попыток, как задумано в `registration.proto` — отслеживание попыток по IP/identifier отдельным хранилищем не реализовано в этой итерации. Для одного легитимного пользователя разница не заметна (решение — доли секунды CPU), но от задуманного "невидимо, пока нет абьюза" текущая реализация отступает.
+  - Отправка кода подтверждения — только dev-заглушка (`logSender`, `internal/modules/identity/dev_senders.go`): код пишется в лог, а не отправляется реально по SMS/почте. Интеграция с настоящим SMS-гейтвеем/почтовым сервисом не входит в эту итерацию.
+  - Новый пользователь получает статус `pending` (значение по умолчанию) — даже после подтверждения телефона и email ничего не переводит его в `active`.
+  - `StartPhoneVerification`/`StartEmailVerification` с тем же номером/почтой каждый раз создают новую сессию регистрации, а не переиспользуют существующую (так проще, и это безопасно — уникальность всё равно гарантируется на `CompleteRegistration`), хотя комментарий в proto изначально предполагал переотправку в рамках одной сессии.
+* **`notifications`** — `EmailSender` (SMTP relay) и `TelegramSender` (Bot API `sendMessage`) реально реализованы и покрыты тестами, но:
+  - у `TelegramSender` резолвинг телефон→chat_id (`ChatResolver`) не реализован вообще — единственная реализация всегда отвечает "не резолвится" (`unresolvedChatResolver`). Нужен вебхук, принимающий от Telegram событие "пользователь поделился контактом с ботом" (см. doc-комментарий `NotificationService` в `notifications.proto`), и хранилище телефон→chat_id — ни того, ни другого в этой итерации нет, поэтому реальная отправка в Telegram пока не сработает ни при каких настройках.
+  - SMS/MAX — всегда `LogSender`, интеграций нет вовсе.
+  - `identity` пока зовёт свой собственный `logSender` (`internal/modules/identity/dev_senders.go`), а не `peer.notifications.v1.NotificationService.Send` — модуль `notifications` готов к этому вызову, но сама замена ещё не сделана.
 * Пакет `internal/pkg/minio` адаптирован для работы в этом проекте, но пока не подключён ни к одному модулю: нет ни сервиса MinIO в docker-compose, ни решения о том, что и как через него сидировать (например, аватары из `identity.profiles.avatar_url`). Поля `seeds.assets`/`assetsBucket`/`assetsTimeout` в `configs/identity.yaml` по той же причине не отражены в `configuration` и игнорируются загрузчиком конфига — туда смотрит только `seeds.db`/`seeds.levels`.
 * Миграции и сиды больше не применяются при старте модуля: `cmd/setup` (`make setup`) — отдельный разовый прогон перед раскаткой реплик, `cmd/bootstrap` (`initialization` модуля) только подключается к уже готовой схеме. На проде `make setup` нужно гонять как setup-job/init-container, завершающийся успешно до старта реплик приложения; docker-compose пока этот шаг не автоматизирует — `make setup` запускается вручную.
-* Тесты `natsdiscovery` (включая новые `TestReapStaleRoutes_*`) и `test-integration` в целом требуют реального NATS с JetStream (`NATS_TEST_URL`) — в среде, где это писалось, живого NATS не было, поэтому они проверены сборкой/`go vet` и логикой, но не прогоном; `make nats-up && make test-integration` перед тем, как полагаться на эту ветку в проде.
+* Тесты `natsdiscovery`, `natsrpc.Client` и `captcha`'s KV-хранилище (`TestKVStore_*`) и `test-integration` в целом требуют реального NATS с JetStream (`NATS_TEST_URL`) — в среде, где это писалось, живого NATS не было, поэтому они проверены сборкой/`go vet` и логикой, но не прогоном; `make nats-up && make test-integration` перед тем, как полагаться на эту ветку в проде.
 
 ---
 

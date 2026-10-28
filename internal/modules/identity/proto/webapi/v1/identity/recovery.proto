@@ -1,0 +1,154 @@
+syntax = "proto3";
+
+package webapi.identity.auth.v1;
+
+option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity;authv1";
+
+import "webapi/v1/delivery/delivery.proto";
+
+// IdentityRecoveryService — восстановление доступа: идентификатор →
+// доступные способы получить код → выбор способа и отправка кода →
+// подтверждение кода → сброс пароля.
+//
+// Каналы (webapi.delivery.v1.DeliveryChannel) — не "привязанные к аккаунту
+// заранее" сущности, а общие транспорты, через которые сервис умеет
+// отправлять данные:
+//   - EMAIL/SMS доступны, если у аккаунта есть email/телефон (identity.auth) —
+//     туда и уходит код напрямую.
+//   - TELEGRAM/MAX не требуют никакой предварительной привязки/сохранённого
+//     chat_id: пользователь открывает бота и делится номером телефона через
+//     штатный механизм бота ("поделиться контактом") — бот получает номер,
+//     backend сверяет его с телефоном аккаунта и доставляет код в тот же
+//     чат. Доступны при том же условии, что SMS (телефон на аккаунте есть),
+//     механика доставки — через бота, не прямая отправка от backend. Это и
+//     означает отсутствие masked_destination у этих двух каналов в
+//     AvailableMethod — доставлять не на сохранённый адрес, а в чат,
+//     который определится в момент обращения к боту.
+//
+// InitiateRecovery — тот же класс осознанной "утечки", что и
+// IdentityRegistrationService.CheckIdentifier (см. комментарий там), только
+// шире: раскрывает не просто факт существования аккаунта, а какие каналы
+// восстановления ему доступны — соответственно, куда атакующему имеет
+// смысл целиться. Поэтому доступные методы возвращаются с замаскированным
+// destination (например "a***@example.com", "+7 *** *** **67"), не полным
+// значением, и сам вызов требует PoW (pow_challenge/pow_nonce — см.
+// webapi.captcha.v1.CaptchaService.IssueChallenge) и должен быть
+// рейт-лимитирован на гейтвее (methodGuard), как и CheckIdentifier.
+// SendRecoveryCode тоже под PoW — он запускает отправку кода реальному
+// адресату (email/SMS) или активирует ожидание на стороне бота
+// (Telegram/MAX), то есть это тот же вектор бомбёжки чужого канала, что у
+// IdentityRegistrationService.StartPhoneVerification/StartEmailVerification.
+//
+// ResetPassword — пароль на сервер не передаётся: salt/verifier клиент
+// вычисляет локально (как и везде в этом контракте, см.
+// IdentityAuthService.CompleteAuthentication/
+// IdentityRegistrationService.CompleteRegistration). После успешного сброса
+// сервис фиксирует password_changed_at и возвращает frozen_until
+// (unix-время) — до этого момента чувствительные действия с аккаунтом
+// должны быть недоступны (длительность — passwordResetFreezeHours в
+// конфиге identity). На момент этого контракта enforcement заморозки
+// ограничен: других чувствительных операций (смена email/телефона и т.п.)
+// в проекте пока не существует, так что frozen_until — это зафиксированный
+// факт на будущее, а не действующий запрет прямо сейчас. Также сброс
+// пароля не инвалидирует существующие сессии — в проекте пока нет самого
+// механизма сессий/токенов (см. README "Известные ограничения").
+//
+// identifier — email, телефон или username (identity.auth.username,
+// миграция 0011); регистронезависимо для email/username. Ни один текущий
+// write-путь (регистрация) username не задаёт — колонка пуста у всех
+// аккаунтов, пока в IdentityRegistrationService не появится отдельный шаг
+// для его выбора, но поиск (FindAuth) его уже учитывает.
+service IdentityRecoveryService {
+  // InitiateRecovery проверяет identifier и возвращает доступные способы
+  // восстановления. STATUS_NOT_FOUND и список способов — по одному и тому
+  // же классу причин неотличимы от STATUS_CAPTCHA_REQUIRED только в
+  // смысле "не раскрыто больше, чем должно": см. комментарий сервиса.
+  rpc InitiateRecovery (InitiateRecoveryRequest) returns (InitiateRecoveryResponse);
+
+  // SendRecoveryCode отправляет одноразовый код по выбранному каналу.
+  // Канал должен быть среди тех, что InitiateRecovery перечислил как
+  // доступные для этой сессии — иначе INVALID_ARGUMENT. Повторный вызов
+  // (в том числе с другим каналом) — переотправка, старый код перестаёт
+  // быть действителен.
+  rpc SendRecoveryCode (SendRecoveryCodeRequest) returns (SendRecoveryCodeResponse);
+
+  // ConfirmRecoveryCode проверяет код. Неверный код — UNAUTHENTICATED;
+  // истёкший/некорректный recovery_session_id — NOT_FOUND; слишком много
+  // неверных попыток — RESOURCE_EXHAUSTED (лимит — тот же, что у
+  // IdentityRegistrationService: 5 попыток на код).
+  rpc ConfirmRecoveryCode (ConfirmRecoveryCodeRequest) returns (ConfirmRecoveryCodeResponse);
+
+  // ResetPassword — финальный шаг, требует подтверждённого кода в этой
+  // сессии (иначе FAILED_PRECONDITION). Завершает сессию восстановления
+  // (одноразовая, повторный вызов — NOT_FOUND).
+  rpc ResetPassword (ResetPasswordRequest) returns (ResetPasswordResponse);
+}
+
+message InitiateRecoveryRequest {
+  string identifier = 1;
+  // pow_challenge/pow_nonce — см. комментарий сервиса; пусты в первой
+  // попытке, заполняются после получения STATUS_CAPTCHA_REQUIRED.
+  string pow_challenge = 2;
+  string pow_nonce = 3;
+}
+
+message AvailableMethod {
+  webapi.delivery.v1.DeliveryChannel channel = 1;
+  // masked_destination — замаскированный адрес/номер (например
+  // "a***@example.com", "+7 *** *** **67") для EMAIL/SMS; пусто для
+  // TELEGRAM/MAX — у них нет сохранённого адреса, доставка идёт в чат,
+  // который определится через бота (см. комментарий сервиса).
+  string masked_destination = 2;
+}
+
+message InitiateRecoveryResponse {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_AVAILABLE = 1;
+    STATUS_NOT_FOUND = 2;
+    STATUS_CAPTCHA_REQUIRED = 3;
+  }
+  Status status = 1;
+  // recovery_session_id заполнен только при status == STATUS_AVAILABLE.
+  string recovery_session_id = 2;
+  // available_methods заполнен только при status == STATUS_AVAILABLE.
+  repeated AvailableMethod available_methods = 3;
+}
+
+message SendRecoveryCodeRequest {
+  string recovery_session_id = 1;
+  webapi.delivery.v1.DeliveryChannel channel = 2;
+  string pow_challenge = 3;
+  string pow_nonce = 4;
+}
+
+message SendRecoveryCodeResponse {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_SENT = 1;
+    STATUS_CAPTCHA_REQUIRED = 2;
+  }
+  Status status = 1;
+}
+
+message ConfirmRecoveryCodeRequest {
+  string recovery_session_id = 1;
+  string code = 2;
+}
+
+message ConfirmRecoveryCodeResponse {}
+
+message ResetPasswordRequest {
+  string recovery_session_id = 1;
+  // salt, verifier — см. комментарий сервиса; как и в
+  // IdentityRegistrationService.CompleteRegistration, пароль сюда не попадает.
+  bytes salt = 2;
+  bytes verifier = 3;
+}
+
+message ResetPasswordResponse {
+  // frozen_until — unix-время (секунды), до которого чувствительные
+  // действия с аккаунтом должны считаться недоступными (см. комментарий
+  // сервиса про текущие границы enforcement).
+  int64 frozen_until = 1;
+}

@@ -1,0 +1,190 @@
+syntax = "proto3";
+
+package webapi.identity.auth.v1;
+
+option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity;authv1";
+
+// IdentityRegistrationService — многошаговая регистрация: телефон с согласием
+// на обработку персональных данных → подтверждение телефона кодом из SMS →
+// email → подтверждение email кодом из письма → пароль (SRP, задаётся
+// клиентом). На каждом шаге сервер проверяет, что предыдущие пройдены, через
+// registration_session_id, который возвращает StartPhoneVerification и несут
+// все последующие запросы этой регистрации.
+//
+// CheckIdentifier — отдельный от IdentityAuthService.InitializeSession вход:
+// у InitializeSession несуществующий identifier теперь не отличить от
+// существующего (анти-перечисление аккаунтов, см. README "Известные
+// ограничения"). Но сценарий "ввели email/телефон → ведём на вход или на
+// регистрацию" именно такого отличия и требует. Поэтому для него — отдельный,
+// осознанно "утекающий" эндпоинт: так же поступают многие крупные сервисы на
+// этом конкретном шаге (например, Google отвечает "не нашли такой аккаунт"
+// уже на экране ввода почты).
+//
+// Это осознанная утечка, а не дырка, только пока её дважды ограничивают:
+// - rate limit на гейтвее (methodGuard.rateLimitRps для этого метода);
+// - proof-of-work (pow_challenge/pow_nonce): после N попыток без решения (или
+//   с неверным/просроченным) сервер не отвечает STATUS_EXISTS/STATUS_NOT_FOUND
+//   вообще, а возвращает STATUS_CAPTCHA_REQUIRED. Так единичный пользователь
+//   не замечает лишнего шага вовсе (решение — доли секунды CPU), а массовый
+//   перебор идентификаторов становится дорогим. Тот же приём — у
+//   StartPhoneVerification/StartEmailVerification, но там он защищает не от
+//   перечисления, а от SMS/email-бомбёжки чужих номеров и почт (отправка
+//   кода — не бесплатная и не безобидная операция).
+//
+// Challenge выдаёт и проверяет отдельный модуль captcha:
+// - challenge/difficulty для решения клиент получает НАПРЯМУЮ у captcha, через
+//   гейтвей (webapi.captcha.v1.CaptchaService.IssueChallenge, см.
+//   internal/modules/captcha/proto/webapi/v1/captcha/captcha.proto) — поэтому
+//   в ответах этого файла challenge не дублируется, только статус-сигнал,
+//   что его нужно решить;
+// - решение (pow_challenge/pow_nonce) проверяет сам identity server-side,
+//   вызывая peer.captcha.v1.CaptchaService.VerifyChallenge
+//   (internal/modules/captcha/proto/peer/v1/captcha/captcha.proto) по
+//   NATS — наружу через гейтвей этот метод не торчит, иначе клиент мог бы
+//   просто заявить "решение верное" без проверки сервером.
+// identity не импортирует Go-код captcha — только сгенерированные из его
+// buf-контрактов типы, адресуясь по NATS subject'у (natsrpc.RPCSubject),
+// собранному из имени/версии captcha-сервиса в своём конфиге. Модули знают
+// друг о друге только через buf-контракты, не через прямые Go-импорты.
+//
+// ConfirmPhoneVerification/ConfirmEmailVerification PoW не требуют: туда
+// нельзя попасть без валидного registration_session_id, а переборы самого
+// кода внутри сессии ограничены счётчиком попыток (RESOURCE_EXHAUSTED) и
+// коротким TTL кода — доказательство работы здесь не добавило бы защиты.
+service IdentityRegistrationService {
+  // CheckIdentifier проверяет, существует ли уже учётная запись с таким
+  // identifier (email/телефон/username — как и в InitializeSession).
+  rpc CheckIdentifier (CheckIdentifierRequest) returns (CheckIdentifierResponse);
+
+  // StartPhoneVerification — первый шаг регистрации. personal_data_consent
+  // обязателен (152-ФЗ): без него — INVALID_ARGUMENT, запрос не создаёт
+  // сессию и не отправляет код. Если телефон уже привязан к другой учётной
+  // записи — ALREADY_EXISTS. При успехе создаёт registration_session и
+  // отправляет одноразовый код по SMS. Повторный вызов с тем же телефоном в
+  // рамках уже начатой регистрации — переотправка кода (тот же
+  // registration_session_id, новый код, старый перестаёт быть действителен).
+  rpc StartPhoneVerification (StartPhoneVerificationRequest) returns (StartPhoneVerificationResponse);
+
+  // ConfirmPhoneVerification проверяет код из SMS. Неверный код —
+  // UNAUTHENTICATED; истёкший или некорректный registration_session_id —
+  // NOT_FOUND; слишком много неверных попыток — RESOURCE_EXHAUSTED. При
+  // успехе телефон в рамках этой сессии считается подтверждённым и
+  // открывает следующий шаг (StartEmailVerification).
+  rpc ConfirmPhoneVerification (ConfirmPhoneVerificationRequest) returns (ConfirmPhoneVerificationResponse);
+
+  // StartEmailVerification — шаг после подтверждения телефона. Требует
+  // подтверждённого телефона в этой сессии (иначе FAILED_PRECONDITION).
+  // Если email уже привязан к другой учётной записи — ALREADY_EXISTS. При
+  // успехе отправляет одноразовый код на почту; повторный вызов — переотправка.
+  rpc StartEmailVerification (StartEmailVerificationRequest) returns (StartEmailVerificationResponse);
+
+  // ConfirmEmailVerification проверяет код из письма — коды ошибок те же,
+  // что у ConfirmPhoneVerification. При успехе email подтверждён и
+  // открывает финальный шаг (CompleteRegistration).
+  rpc ConfirmEmailVerification (ConfirmEmailVerificationRequest) returns (ConfirmEmailVerificationResponse);
+
+  // CompleteRegistration — финальный шаг: пользователь задаёт пароль. Как и
+  // в IdentityAuthService.Register, пароль на сервер не передаётся —
+  // salt/verifier клиент вычисляет локально (srp.GenerateSalt +
+  // srp.ComputeVerifier) и присылает уже готовыми. Требует подтверждённых
+  // телефона и email в этой сессии (иначе FAILED_PRECONDITION). Создаёт
+  // учётную запись и завершает сессию регистрации.
+  rpc CompleteRegistration (CompleteRegistrationRequest) returns (CompleteRegistrationResponse);
+}
+
+message CheckIdentifierRequest {
+  string identifier = 1;
+  // pow_challenge/pow_nonce — пусты в первой попытке. Если сервер ответит
+  // STATUS_CAPTCHA_REQUIRED, клиент получает challenge отдельным вызовом
+  // webapi.captcha.v1.CaptchaService.IssueChallenge, решает его и повторяет
+  // этот же запрос с pow_challenge (тем, что вернул IssueChallenge) и
+  // pow_nonce (найденным решением). Невалидное, просроченное или уже
+  // использованное решение — INVALID_ARGUMENT.
+  string pow_challenge = 2;
+  string pow_nonce = 3;
+}
+
+message CheckIdentifierResponse {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    // Учётная запись с этим identifier существует.
+    STATUS_EXISTS = 1;
+    // Учётной записи с этим identifier нет.
+    STATUS_NOT_FOUND = 2;
+    // Превышен лимит попыток без PoW: STATUS_EXISTS/STATUS_NOT_FOUND не
+    // раскрывается, пока запрос не повторят с pow_challenge/pow_nonce (см.
+    // комментарий у CheckIdentifierRequest).
+    STATUS_CAPTCHA_REQUIRED = 3;
+  }
+  Status status = 1;
+}
+
+message StartPhoneVerificationRequest {
+  string phone = 1;
+  // personal_data_consent — согласие на обработку персональных данных.
+  // Обязательно true, иначе INVALID_ARGUMENT.
+  bool personal_data_consent = 2;
+  // pow_challenge/pow_nonce — см. CheckIdentifierRequest; здесь защищают не
+  // от перечисления, а от SMS-бомбёжки чужого номера.
+  string pow_challenge = 3;
+  string pow_nonce = 4;
+}
+
+message StartPhoneVerificationResponse {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_STARTED = 1;
+    STATUS_CAPTCHA_REQUIRED = 2;
+  }
+  Status status = 1;
+  // registration_session_id заполнен только при status == STATUS_STARTED.
+  string registration_session_id = 2;
+}
+
+message ConfirmPhoneVerificationRequest {
+  string registration_session_id = 1;
+  // code — одноразовый код из SMS.
+  string code = 2;
+}
+
+message ConfirmPhoneVerificationResponse {}
+
+message StartEmailVerificationRequest {
+  string registration_session_id = 1;
+  string email = 2;
+  // pow_challenge/pow_nonce — см. CheckIdentifierRequest; здесь защищают не
+  // от перечисления, а от бомбёжки чужого email.
+  string pow_challenge = 3;
+  string pow_nonce = 4;
+}
+
+message StartEmailVerificationResponse {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_STARTED = 1;
+    STATUS_CAPTCHA_REQUIRED = 2;
+  }
+  Status status = 1;
+}
+
+message ConfirmEmailVerificationRequest {
+  string registration_session_id = 1;
+  // code — одноразовый код из письма.
+  string code = 2;
+}
+
+message ConfirmEmailVerificationResponse {}
+
+message CompleteRegistrationRequest {
+  string registration_session_id = 1;
+  // salt, verifier — см. комментарий у IdentityAuthService.Register в auth.proto.
+  bytes salt = 2;
+  bytes verifier = 3;
+  string first_name = 4;
+  string last_name = 5;
+  string middle_name = 6;
+}
+
+message CompleteRegistrationResponse {
+  string user_id = 1;
+}
