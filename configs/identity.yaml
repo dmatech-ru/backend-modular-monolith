@@ -1,2 +1,4 @@
 serviceName: "identity-service"
 logLevel: "debug"
+appVersion: "0.0.0"
+env: "development"

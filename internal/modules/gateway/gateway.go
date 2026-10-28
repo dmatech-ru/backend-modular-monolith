@@ -4,42 +4,48 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/nats-io/nats.go"
+
 	"dmatech.ru/internal/pkg/config"
 	"dmatech.ru/internal/pkg/logger"
 	"dmatech.ru/internal/pkg/natsrpc"
 	"dmatech.ru/internal/pkg/service"
 )
 
-const GATEWAY_CONFIG_PATH = "GATEWAY_CONFIG_PATH"
+const configPathEnv = "GATEWAY_CONFIG_PATH"
 
 func init() {
 	service.Register(initialization)
 }
 
 func initialization(ctx context.Context) error {
-
-	cfg, err := config.Load[configuration](GATEWAY_CONFIG_PATH)
+	cfg, err := config.Load[configuration](configPathEnv)
 	if err != nil {
-		return fmt.Errorf("Gateway config error: %w", err)
+		return fmt.Errorf("gateway config: %w", err)
 	}
 
-	log := logger.NewModuleLogger("Gateway", cfg.LogLevel)
+	log := logger.NewModuleLogger(cfg.ServiceName, cfg.LogLevel)
 
-	nc, err := natsrpc.NewConnection(cfg.NatsURL, log)
+	nc, err := service.Get[nats.Conn]()
 	if err != nil {
-		return fmt.Errorf("failed to connect to NATS: %w", err)
+		return fmt.Errorf("gateway: %w", err)
 	}
 
-	err = natsrpc.WatchRoutes(ctx, nc, log, cfg.Env, func(service, version string, bufBytes []byte, isDeleted bool) {
-		if isDeleted {
-			// router.Remove(service, version)
-			return
-		}
+	routes := newRouteTable()
 
-		// router.CompileAndAdd(service, version, bufBytes)
-	})
+	watcher, err := natsrpc.WatchRoutes(ctx, nc, log, cfg.Env, routes.Apply)
+	if err != nil {
+		return fmt.Errorf("failed to watch routes: %w", err)
+	}
+	service.OnShutdown(watcher.Close)
 
-	log.Info("модуль успешно запущен!")
+	srv := newServer(cfg.Http, log, routes)
+	if err := srv.Start(); err != nil {
+		return fmt.Errorf("failed to start http server: %w", err)
+	}
+	// Хуки выполняются в обратном порядке: сначала HTTP-сервер, затем watcher.
+	service.OnShutdown(srv.Shutdown)
 
+	log.Info("Модуль успешно запущен", "addr", cfg.Http.Addr)
 	return nil
 }

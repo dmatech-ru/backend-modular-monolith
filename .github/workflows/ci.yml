@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Start NATS with JetStream
+        run: docker run -d --name nats -p 4222:4222 nats:2.12-alpine -js
+
+      - name: Generate module imports
+        run: go run ./cmd/builder -all
+
+      - name: Check formatting
+        run: test -z "$(gofmt -l cmd internal)" || (gofmt -l cmd internal; exit 1)
+
+      - name: Check go.mod and vendor are in sync
+        run: |
+          go mod tidy
+          go mod vendor
+          git diff --exit-code -- go.mod go.sum vendor/
+
+      - name: Vet
+        run: |
+          go vet ./...
+          go vet -tags dynamic ./...
+
+      - name: Staticcheck
+        run: |
+          go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
+          go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 -tags dynamic ./...
+
+      - name: Build
+        run: go build -tags dynamic -o bin/app ./cmd/bootstrap
+
+      - name: Test
+        env:
+          NATS_TEST_URL: nats://localhost:4222
+        run: go test -race -count=1 -tags dynamic ./...
