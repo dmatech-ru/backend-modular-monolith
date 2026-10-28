@@ -39,6 +39,12 @@ func initialization(ctx context.Context) error {
 	}
 	service.OnShutdown(watcher.Close)
 
+	// Чистит маршруты версий, у которых не осталось ни одной живой ноды —
+	// например, все реплики упали без graceful shutdown, и деregister
+	// маршрута выполнить было некому (см. doc-комментарий natsdiscovery).
+	reaper := natsdiscovery.StartStaleRouteReaper(nc, log, cfg.Env, natsdiscovery.DefaultStaleRouteReapInterval)
+	service.OnShutdown(reaper.Close)
+
 	srv := newServer(cfg.Http, cfg.Env, log, routes, nc)
 	if err := srv.Start(); err != nil {
 		return fmt.Errorf("failed to start http server: %w", err)

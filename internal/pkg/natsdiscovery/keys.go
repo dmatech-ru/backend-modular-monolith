@@ -8,6 +8,13 @@
 //     Ключи не имеют TTL и удаляются последней уходящей нодой версии.
 //   - NodesBucket — хартбиты инстансов, ключ {env}.{service}.{version}.{instance}.
 //     Ключи живут NodeHeartbeatTTL и продлеваются фоновым тикером.
+//
+// «Последняя уходящая нода версии» предполагает graceful shutdown. Если все
+// реплики версии упали без него (хартбиты просто истекут по TTL), маршрут
+// деregister'ить было некому и он провисит в RoutesBucket вечно, хоть
+// отвечать на него уже некому. StartStaleRouteReaper закрывает этот
+// пробел: периодически удаляет маршруты, для которых в NodesBucket не
+// осталось ни одной живой ноды.
 package natsdiscovery
 
 import (
@@ -29,6 +36,11 @@ const (
 
 	heartbeatInterval = NodeHeartbeatTTL / 3
 	operationTimeout  = 2 * time.Second
+
+	// DefaultStaleRouteReapInterval — рекомендуемый период вызова
+	// StartStaleRouteReaper. Между двумя проверками маршрут без единой живой
+	// ноды версии может провисеть до NodeHeartbeatTTL + этот интервал.
+	DefaultStaleRouteReapInterval = 30 * time.Second
 )
 
 var invalidTokenChars = regexp.MustCompile(`[^A-Za-z0-9_-]`)

@@ -67,9 +67,10 @@ func (r *Repository) FindAuth(ctx context.Context, identifier string) (AuthRecor
 }
 
 // ChallengeRecord — серверные эфемерные значения SRP-обмена, сохранённые
-// CreateChallenge и восстановленные ConsumeChallenge.
+// CreateChallenge и восстановленные ConsumeChallenge. UserID — nil для
+// фейкового challenge'а анти-перечисления (см. CreateChallenge).
 type ChallengeRecord struct {
-	UserID       string
+	UserID       *string
 	Verifier     []byte
 	ServerSecret []byte
 	ServerPublic []byte
@@ -77,10 +78,22 @@ type ChallengeRecord struct {
 
 // CreateChallenge сохраняет verifier и эфемерные серверные значения SRP-
 // обмена и возвращает идентификатор challenge'а (session_id для клиента).
-func (r *Repository) CreateChallenge(ctx context.Context, userID string, verifier, serverSecret, serverPublic []byte) (string, error) {
+// userID — nil для фейкового challenge'а несуществующего identifier (защита
+// от перечисления аккаунтов, см. srp.FakeCredentials и AuthHandler.
+// InitializeSession): у такого challenge'а нет реального владельца, и
+// хранится он той же вставкой, что и настоящий, чтобы оба пути были
+// неотличимы по форме и по времени выполнения.
+//
+// Попутно (в том же запросе) удаляются просроченные challenge'ы — отдельная
+// фоновая задача для этого не нужна, так как каждый новый вход сам чистит
+// накопившийся мусор.
+func (r *Repository) CreateChallenge(ctx context.Context, userID *string, verifier, serverSecret, serverPublic []byte) (string, error) {
 	var id string
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO identity.auth_challenges (user_id, verifier, server_secret, server_public, expires_at)
+		`WITH cleanup AS (
+		     DELETE FROM identity.auth_challenges WHERE expires_at <= now()
+		 )
+		 INSERT INTO identity.auth_challenges (user_id, verifier, server_secret, server_public, expires_at)
 		 VALUES ($1::uuid, $2, $3, $4, $5)
 		 RETURNING id::text`,
 		userID, verifier, serverSecret, serverPublic, time.Now().Add(challengeTTL),

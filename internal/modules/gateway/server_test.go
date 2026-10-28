@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/descriptorpb"
 
 	authv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity"
 	"dmatech.ru/internal/pkg/natsdiscovery"
@@ -57,6 +59,55 @@ func TestRouteTable(t *testing.T) {
 	list := table.List()
 	if len(list) != 2 || list[0].Service != "a" || list[1].Service != "b" || list[1].Size != 2 {
 		t.Fatalf("unexpected routes %+v", list)
+	}
+}
+
+// buildDescriptorSet собирает синтетический FileDescriptorSet с указанными
+// сервисами в одном файле — без protoc, только для проверки routeTable.
+func buildDescriptorSet(t *testing.T, pkg string, services ...string) []byte {
+	t.Helper()
+	var svcs []*descriptorpb.ServiceDescriptorProto
+	for _, s := range services {
+		svcs = append(svcs, &descriptorpb.ServiceDescriptorProto{Name: proto.String(s)})
+	}
+	set := &descriptorpb.FileDescriptorSet{
+		File: []*descriptorpb.FileDescriptorProto{
+			{Package: proto.String(pkg), Service: svcs},
+		},
+	}
+	data, err := proto.Marshal(set)
+	if err != nil {
+		t.Fatalf("marshal descriptor set: %v", err)
+	}
+	return data
+}
+
+// Если новая версия дескриптора той же версии модуля убрала сервис из
+// набора (например, в билде между рестартами удалили RPC), индекс
+// services не должен продолжать считать его принадлежащим этому маршруту.
+func TestRouteTable_UpdateDropsRemovedService(t *testing.T) {
+	table := newRouteTable(discardLogger())
+	table.Apply(natsdiscovery.RouteUpdate{
+		ServiceName: "identity", Version: "1_0_0",
+		Descriptor: buildDescriptorSet(t, "pkg", "Foo", "Bar"),
+	})
+	if _, ok := table.LookupService("pkg.Foo"); !ok {
+		t.Fatal("expected pkg.Foo to be indexed after first update")
+	}
+	if _, ok := table.LookupService("pkg.Bar"); !ok {
+		t.Fatal("expected pkg.Bar to be indexed after first update")
+	}
+
+	table.Apply(natsdiscovery.RouteUpdate{
+		ServiceName: "identity", Version: "1_0_0",
+		Descriptor: buildDescriptorSet(t, "pkg", "Foo"),
+	})
+
+	if _, ok := table.LookupService("pkg.Foo"); !ok {
+		t.Fatal("expected pkg.Foo to remain indexed after update")
+	}
+	if _, ok := table.LookupService("pkg.Bar"); ok {
+		t.Fatal("expected pkg.Bar to be removed from index once the descriptor dropped it")
 	}
 }
 

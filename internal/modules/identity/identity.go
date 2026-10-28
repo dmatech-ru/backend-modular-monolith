@@ -2,7 +2,9 @@ package identity
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"github.com/nats-io/nats.go"
 
@@ -22,7 +24,25 @@ import (
 const (
 	configPathEnv  = "IDENTITY_CONFIG_PATH"
 	postgresSchema = "identity"
+
+	// minAntiEnumKeyBytes — минимальная длина antiEnumerationKey (см.
+	// srp.FakeCredentials): 256 бит, обычный запас для HMAC-секрета.
+	minAntiEnumKeyBytes = 32
 )
+
+// decodeAntiEnumKey декодирует antiEnumerationKey из конфига и проверяет его
+// длину — короткий или пустой секрет делает srp.FakeCredentials предсказуемым
+// и обесценивает защиту от перечисления аккаунтов.
+func decodeAntiEnumKey(hexKey string) ([]byte, error) {
+	key, err := hex.DecodeString(strings.TrimSpace(hexKey))
+	if err != nil {
+		return nil, fmt.Errorf("antiEnumerationKey: invalid hex: %w", err)
+	}
+	if len(key) < minAntiEnumKeyBytes {
+		return nil, fmt.Errorf("antiEnumerationKey: must be at least %d bytes, got %d", minAntiEnumKeyBytes, len(key))
+	}
+	return key, nil
+}
 
 func init() {
 	service.Register(initialization)
@@ -37,6 +57,11 @@ func initialization(ctx context.Context) error {
 	log := logger.NewModuleLogger(cfg.ServiceName, cfg.LogLevel)
 
 	nc, err := service.Get[nats.Conn]()
+	if err != nil {
+		return fmt.Errorf("identity: %w", err)
+	}
+
+	antiEnumKey, err := decodeAntiEnumKey(cfg.AntiEnumerationKey)
 	if err != nil {
 		return fmt.Errorf("identity: %w", err)
 	}
@@ -61,7 +86,7 @@ func initialization(ctx context.Context) error {
 	}
 	service.OnShutdown(reg.Close)
 
-	sub, err := authhandler.Subscribe(nc, log, cfg.Env, cfg.ServiceName, cfg.AppVersion, identityrepo.New(pool))
+	sub, err := authhandler.Subscribe(nc, log, cfg.Env, cfg.ServiceName, cfg.AppVersion, identityrepo.New(pool), antiEnumKey)
 	if err != nil {
 		return fmt.Errorf("failed to subscribe IdentityAuthService: %w", err)
 	}

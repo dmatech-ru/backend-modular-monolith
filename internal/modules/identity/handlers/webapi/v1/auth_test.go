@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -45,7 +46,7 @@ func (f *fakeRepository) FindAuth(_ context.Context, identifier string) (reposit
 	return repository.AuthRecord{}, repository.ErrNotFound
 }
 
-func (f *fakeRepository) CreateChallenge(_ context.Context, userID string, verifier, serverSecret, serverPublic []byte) (string, error) {
+func (f *fakeRepository) CreateChallenge(_ context.Context, userID *string, verifier, serverSecret, serverPublic []byte) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.nextID++
@@ -83,6 +84,14 @@ func (f *fakeRepository) CreateUser(_ context.Context, p repository.CreateUserPa
 	return id, nil
 }
 
+// testAntiEnumKey — секрет srp.FakeCredentials для тестов (не для прода,
+// см. комментарий у AntiEnumerationKey в identity/config.go).
+var testAntiEnumKey = []byte("test-anti-enumeration-key-32-bytes!")
+
+func newTestHandler() *AuthHandler {
+	return NewAuthHandler(newFakeRepository(), testAntiEnumKey)
+}
+
 func connectCode(t *testing.T, err error) connect.Code {
 	t.Helper()
 	var cerr *connect.Error
@@ -115,7 +124,7 @@ func registerClientSide(t *testing.T, h *AuthHandler, identifier, password strin
 }
 
 func TestRegister_Success(t *testing.T) {
-	h := NewAuthHandler(newFakeRepository())
+	h := newTestHandler()
 
 	resp := registerClientSide(t, h, "alice@example.com", "correct horse battery staple", "Alice")
 	if resp.Msg.GetUserId() == "" {
@@ -124,7 +133,7 @@ func TestRegister_Success(t *testing.T) {
 }
 
 func TestRegister_DuplicateIdentifier(t *testing.T) {
-	h := NewAuthHandler(newFakeRepository())
+	h := newTestHandler()
 	registerClientSide(t, h, "alice@example.com", "correct horse battery staple", "")
 
 	salt, err := srp.GenerateSalt()
@@ -141,7 +150,7 @@ func TestRegister_DuplicateIdentifier(t *testing.T) {
 }
 
 func TestRegister_MissingSaltOrVerifierRejected(t *testing.T) {
-	h := NewAuthHandler(newFakeRepository())
+	h := newTestHandler()
 
 	_, err := h.Register(context.Background(), connect.NewRequest(&identityv1.RegisterRequest{
 		Identifier: "alice@example.com", Verifier: []byte("v"), // без salt
@@ -158,19 +167,74 @@ func TestRegister_MissingSaltOrVerifierRejected(t *testing.T) {
 	}
 }
 
-func TestInitializeSession_NotFound(t *testing.T) {
-	h := NewAuthHandler(newFakeRepository())
+// Анти-перечисление аккаунтов: несуществующий identifier не должен
+// отличаться от существующего ни кодом ошибки (InitializeSession всегда
+// успешен), ни стабильностью ответа, ни результатом второго шага.
 
-	_, err := h.InitializeSession(context.Background(), connect.NewRequest(&identityv1.InitializeSessionRequest{
+func TestInitializeSession_UnknownIdentifierSucceeds(t *testing.T) {
+	h := newTestHandler()
+
+	resp, err := h.InitializeSession(context.Background(), connect.NewRequest(&identityv1.InitializeSessionRequest{
 		Identifier: "unknown@example.com",
 	}))
-	if code := connectCode(t, err); code != connect.CodeNotFound {
-		t.Fatalf("code = %v, want CodeNotFound", code)
+	if err != nil {
+		t.Fatalf("InitializeSession for an unknown identifier must not fail, got: %v", err)
+	}
+	if resp.Msg.GetSessionId() == "" || len(resp.Msg.GetSalt()) == 0 || len(resp.Msg.GetServerPublic()) == 0 {
+		t.Fatalf("expected a well-formed response, got %+v", resp.Msg)
+	}
+}
+
+func TestInitializeSession_UnknownIdentifierSaltIsStable(t *testing.T) {
+	h := newTestHandler()
+	ctx := context.Background()
+	req := connect.NewRequest(&identityv1.InitializeSessionRequest{Identifier: "unknown@example.com"})
+
+	resp1, err := h.InitializeSession(ctx, req)
+	if err != nil {
+		t.Fatalf("InitializeSession: %v", err)
+	}
+	resp2, err := h.InitializeSession(ctx, req)
+	if err != nil {
+		t.Fatalf("InitializeSession: %v", err)
+	}
+
+	if !bytes.Equal(resp1.Msg.GetSalt(), resp2.Msg.GetSalt()) {
+		t.Fatal("salt for the same unknown identifier must be stable across requests, or it would itself leak that the account does not exist")
+	}
+}
+
+func TestInitializeSession_UnknownIdentifierLooksTheSameAcrossReplicas(t *testing.T) {
+	// Две разные "реплики" (разные fakeRepository) с одним и тем же секретом
+	// должны отвечать одинаково для одного и того же неизвестного identifier.
+	h1 := NewAuthHandler(newFakeRepository(), testAntiEnumKey)
+	h2 := NewAuthHandler(newFakeRepository(), testAntiEnumKey)
+	req := connect.NewRequest(&identityv1.InitializeSessionRequest{Identifier: "unknown@example.com"})
+
+	resp1, err := h1.InitializeSession(context.Background(), req)
+	if err != nil {
+		t.Fatalf("InitializeSession (h1): %v", err)
+	}
+	resp2, err := h2.InitializeSession(context.Background(), req)
+	if err != nil {
+		t.Fatalf("InitializeSession (h2): %v", err)
+	}
+	if !bytes.Equal(resp1.Msg.GetSalt(), resp2.Msg.GetSalt()) {
+		t.Fatal("salt for the same unknown identifier must be identical across replicas sharing the same antiEnumerationKey")
+	}
+}
+
+func TestAuthFlow_UnknownIdentifierAlwaysFailsLikeWrongPassword(t *testing.T) {
+	h := newTestHandler()
+
+	_, err := loginAs(t, h, "unknown@example.com", "any password at all")
+	if code := connectCode(t, err); code != connect.CodeUnauthenticated {
+		t.Fatalf("code = %v, want CodeUnauthenticated (must look identical to a wrong password on a real account)", code)
 	}
 }
 
 func TestInitializeSession_EmptyIdentifier(t *testing.T) {
-	h := NewAuthHandler(newFakeRepository())
+	h := newTestHandler()
 
 	_, err := h.InitializeSession(context.Background(), connect.NewRequest(&identityv1.InitializeSessionRequest{
 		Identifier: "   ",
@@ -216,7 +280,7 @@ func loginAs(t *testing.T, h *AuthHandler, identifier, password string) (*connec
 }
 
 func TestAuthFlow_RegisterThenLoginSucceeds(t *testing.T) {
-	h := NewAuthHandler(newFakeRepository())
+	h := newTestHandler()
 	const identifier = "alice@example.com"
 	const password = "correct horse battery staple"
 
@@ -232,7 +296,7 @@ func TestAuthFlow_RegisterThenLoginSucceeds(t *testing.T) {
 }
 
 func TestAuthFlow_WrongPasswordIsRejected(t *testing.T) {
-	h := NewAuthHandler(newFakeRepository())
+	h := newTestHandler()
 	const identifier = "alice@example.com"
 
 	registerClientSide(t, h, identifier, "correct horse battery staple", "")
@@ -244,7 +308,7 @@ func TestAuthFlow_WrongPasswordIsRejected(t *testing.T) {
 }
 
 func TestCompleteAuthentication_SessionIsSingleUse(t *testing.T) {
-	h := NewAuthHandler(newFakeRepository())
+	h := newTestHandler()
 	const identifier = "alice@example.com"
 	const password = "correct horse battery staple"
 
@@ -278,7 +342,7 @@ func TestCompleteAuthentication_SessionIsSingleUse(t *testing.T) {
 }
 
 func TestCompleteAuthentication_MissingFields(t *testing.T) {
-	h := NewAuthHandler(newFakeRepository())
+	h := newTestHandler()
 
 	_, err := h.CompleteAuthentication(context.Background(), connect.NewRequest(&identityv1.CompleteAuthenticationRequest{
 		SessionId: "   ",

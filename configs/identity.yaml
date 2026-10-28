@@ -3,6 +3,11 @@ logLevel: "debug"
 appVersion: "0.0.0"
 env: "development"
 postgresUrl: "postgres://postgres:postgres@postgres:5432/db?sslmode=disable"
+# Дев-секрет (как и postgresUrl выше) — для реального деплоя сгенерировать
+# свой (openssl rand -hex 32) и хранить как секрет, не в этом файле. Должен
+# быть одинаковым на всех репликах, иначе поведение для одного identifier
+# будет отличаться между ними (см. internal/pkg/srp.FakeCredentials).
+antiEnumerationKey: "35b9094509467ac07e85b7b58605009ca9164f0e481af9f62c81b4f9367051ee"
 seeds:
   db: "/mnt/workspace/backend-modular-monolith/seeds/identity/db"
   assets: "/mnt/workspace/backend-modular-monolith/seeds/identity/assets"

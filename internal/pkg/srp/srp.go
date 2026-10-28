@@ -26,6 +26,7 @@
 package srp
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -147,6 +148,47 @@ func ComputeVerifier(identifier, password string, salt []byte) []byte {
 // дожидаясь первой попытки входа.
 func ValidVerifier(verifier []byte) bool {
 	return checkSize(verifier) == nil
+}
+
+// FakeCredentials детерминированно производит правдоподобные salt/verifier
+// для identifier, у которого на самом деле нет аккаунта — защита
+// InitializeSession от перечисления аккаунтов (account enumeration): сервер
+// без обращения к БД отвечает тем же по форме, что и для существующего
+// identifier, и отличить несуществующий identifier от существующего по коду
+// ответа невозможно. Один и тот же identifier при любом повторном запросе и
+// на любой реплике даёт один и тот же результат (key общий для всех реплик),
+// поэтому поведение не меняется между запросами.
+//
+// key должен быть секретом (минимум 32 случайных байта), одинаковым на всех
+// репликах. В отличие от группы SRP (N, g — публичные константы протокола),
+// key — это секрет именно этого сервиса: если key узнает атакующий, он
+// сможет сам посчитать FakeCredentials и отличить фейковый salt от
+// настоящего, что обесценит защиту.
+//
+// Пройти второй шаг (CompleteAuthentication) с таким verifier невозможно ни
+// при каком пароле — он не выводится ни из какого x, поэтому proof всегда
+// не совпадёт. Для атакующего это выглядит как "неверный пароль", то есть
+// так же, как для настоящего, но несуществующего, аккаунта.
+func FakeCredentials(key []byte, identifier string) (salt, verifier []byte) {
+	salt = expand(key, "srp-fake-salt", identifier, 16)
+	v := new(big.Int).Mod(new(big.Int).SetBytes(expand(key, "srp-fake-verifier", identifier, nLen)), n)
+	return salt, v.Bytes()
+}
+
+// expand растягивает key+label+identifier до length байт через HMAC-SHA256
+// со счётчиком (тот же приём, что HKDF-expand) — детерминированный источник
+// псевдослучайных байт произвольной длины из короткого секрета.
+func expand(key []byte, label, identifier string, length int) []byte {
+	out := make([]byte, 0, length)
+	for counter := byte(1); len(out) < length; counter++ {
+		mac := hmac.New(sha256.New, key)
+		mac.Write([]byte(label))
+		mac.Write([]byte{0})
+		mac.Write([]byte(identifier))
+		mac.Write([]byte{counter})
+		out = append(out, mac.Sum(nil)...)
+	}
+	return out[:length]
 }
 
 // NewServerChallenge генерирует эфемерные серверные значения SRP-обмена:

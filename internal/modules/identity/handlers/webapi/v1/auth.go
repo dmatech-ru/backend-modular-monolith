@@ -22,7 +22,7 @@ import (
 // потребителя (здесь), чтобы тесты могли подставить фейк без реальной БД.
 type Repository interface {
 	FindAuth(ctx context.Context, identifier string) (repository.AuthRecord, error)
-	CreateChallenge(ctx context.Context, userID string, verifier, serverSecret, serverPublic []byte) (string, error)
+	CreateChallenge(ctx context.Context, userID *string, verifier, serverSecret, serverPublic []byte) (string, error)
 	ConsumeChallenge(ctx context.Context, challengeID string) (repository.ChallengeRecord, error)
 	CreateUser(ctx context.Context, p repository.CreateUserParams) (string, error)
 }
@@ -32,21 +32,33 @@ type AuthHandler struct {
 	authv1connect.UnimplementedIdentityAuthServiceHandler
 
 	repo Repository
+	// antiEnumKey — секрет для srp.FakeCredentials (защита InitializeSession
+	// от перечисления аккаунтов), см. комментарий там.
+	antiEnumKey []byte
 }
 
 // NewAuthHandler создаёт обработчик IdentityAuthService поверх repo.
-func NewAuthHandler(repo Repository) *AuthHandler {
-	return &AuthHandler{repo: repo}
+// antiEnumKey — секрет для srp.FakeCredentials, общий для всех реплик.
+func NewAuthHandler(repo Repository, antiEnumKey []byte) *AuthHandler {
+	return &AuthHandler{repo: repo, antiEnumKey: antiEnumKey}
 }
 
 // NewHandler собирает HTTP-обработчик IdentityAuthService для монтирования
 // в веб-сервер: возвращает путь монтирования и сам connect-handler.
-func NewHandler(repo Repository, opts ...connect.HandlerOption) (string, http.Handler) {
-	return authv1connect.NewIdentityAuthServiceHandler(NewAuthHandler(repo), opts...)
+func NewHandler(repo Repository, antiEnumKey []byte, opts ...connect.HandlerOption) (string, http.Handler) {
+	return authv1connect.NewIdentityAuthServiceHandler(NewAuthHandler(repo, antiEnumKey), opts...)
 }
 
 // InitializeSession — первый шаг SRP-входа: по identifier находит учётную
 // запись и генерирует эфемерные серверные значения SRP-обмена.
+//
+// Для несуществующего identifier ответ не отличается по форме: вместо
+// CodeNotFound используются детерминированные "фейковые" salt/verifier
+// (srp.FakeCredentials) — иначе сам код ответа раскрывал бы, зарегистрирован
+// ли identifier (account enumeration). Пройти второй шаг с такими
+// значениями невозможно ни при каком пароле — CompleteAuthentication
+// вернёт то же CodeUnauthenticated, что и при неверном пароле на настоящем
+// аккаунте.
 func (h *AuthHandler) InitializeSession(
 	ctx context.Context,
 	req *connect.Request[identityv1.InitializeSessionRequest],
@@ -56,27 +68,32 @@ func (h *AuthHandler) InitializeSession(
 		return nil, fieldError(connect.CodeInvalidArgument, "identifier", "identifier must not be empty")
 	}
 
+	var userID *string
+	var salt, verifier []byte
+
 	auth, err := h.repo.FindAuth(ctx, identifier)
-	if errors.Is(err, repository.ErrNotFound) {
-		return nil, connect.NewError(connect.CodeNotFound, errors.New("account not found"))
+	switch {
+	case errors.Is(err, repository.ErrNotFound):
+		salt, verifier = srp.FakeCredentials(h.antiEnumKey, identifier)
+	case err != nil:
+		return nil, connect.NewError(connect.CodeInternal, err)
+	default:
+		userID, salt, verifier = &auth.UserID, auth.Salt, auth.Verifier
 	}
+
+	serverSecret, serverPublic, err := srp.NewServerChallenge(verifier)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	serverSecret, serverPublic, err := srp.NewServerChallenge(auth.Verifier)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-
-	sessionID, err := h.repo.CreateChallenge(ctx, auth.UserID, auth.Verifier, serverSecret, serverPublic)
+	sessionID, err := h.repo.CreateChallenge(ctx, userID, verifier, serverSecret, serverPublic)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
 	return connect.NewResponse(&identityv1.InitializeSessionResponse{
 		SessionId:    sessionID,
-		Salt:         auth.Salt,
+		Salt:         salt,
 		ServerPublic: serverPublic,
 	}), nil
 }

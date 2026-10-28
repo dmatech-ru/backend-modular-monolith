@@ -165,3 +165,69 @@ func TestEachChallengeUsesFreshEphemeralValues(t *testing.T) {
 		t.Fatal("two challenges for the same verifier produced the same server public value")
 	}
 }
+
+func TestFakeCredentials_DeterministicForSameIdentifier(t *testing.T) {
+	key := []byte("test-anti-enumeration-key-32-bytes!")
+
+	salt1, verifier1 := FakeCredentials(key, "unknown@example.com")
+	salt2, verifier2 := FakeCredentials(key, "unknown@example.com")
+
+	if !bytes.Equal(salt1, salt2) {
+		t.Fatal("fake salt must be stable across calls for the same identifier")
+	}
+	if !bytes.Equal(verifier1, verifier2) {
+		t.Fatal("fake verifier must be stable across calls for the same identifier")
+	}
+}
+
+func TestFakeCredentials_DiffersByIdentifierAndKey(t *testing.T) {
+	key := []byte("test-anti-enumeration-key-32-bytes!")
+	otherKey := []byte("a-completely-different-32-byte-key!")
+
+	salt1, verifier1 := FakeCredentials(key, "alice@example.com")
+	salt2, verifier2 := FakeCredentials(key, "bob@example.com")
+	if bytes.Equal(salt1, salt2) {
+		t.Fatal("fake salt must differ between identifiers")
+	}
+	if bytes.Equal(verifier1, verifier2) {
+		t.Fatal("fake verifier must differ between identifiers")
+	}
+
+	salt3, verifier3 := FakeCredentials(otherKey, "alice@example.com")
+	if bytes.Equal(salt1, salt3) || bytes.Equal(verifier1, verifier3) {
+		t.Fatal("fake credentials must differ between keys for the same identifier")
+	}
+}
+
+func TestFakeCredentials_LooksLikeARealChallenge(t *testing.T) {
+	key := []byte("test-anti-enumeration-key-32-bytes!")
+	salt, verifier := FakeCredentials(key, "unknown@example.com")
+
+	if len(salt) != 16 {
+		t.Fatalf("fake salt length = %d, want 16 (same as GenerateSalt)", len(salt))
+	}
+	if !ValidVerifier(verifier) {
+		t.Fatal("fake verifier must pass the same validity check as a real one")
+	}
+
+	// Challenge по фейковому verifier строится так же, как по настоящему, и
+	// ни один клиент не сможет подобрать proof под него.
+	serverSecret, serverPublic, err := NewServerChallenge(verifier)
+	if err != nil {
+		t.Fatalf("NewServerChallenge on fake verifier: %v", err)
+	}
+
+	clientSecret, clientPublic, err := NewClientEphemeral()
+	if err != nil {
+		t.Fatalf("NewClientEphemeral: %v", err)
+	}
+	proof, _, err := ComputeClientProof("unknown@example.com", "any password at all",
+		salt, clientSecret, clientPublic, serverPublic)
+	if err != nil {
+		t.Fatalf("ComputeClientProof: %v", err)
+	}
+
+	if _, err := VerifyClientProof(verifier, serverSecret, serverPublic, clientPublic, proof); !errors.Is(err, ErrProofMismatch) {
+		t.Fatalf("VerifyClientProof against a fake verifier = %v, want ErrProofMismatch (no password can ever match)", err)
+	}
+}

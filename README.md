@@ -1,5 +1,7 @@
 # Backend Modular Monolith on Go
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Бэкенд-сервис на Go, спроектированный по архитектуре **модульного монолита (Modular Monolith)**: бизнес-домены изолированы друг от друга (low coupling), а деплоится единый бинарник с нужным набором модулей.
 
 Взаимодействие модулей и динамического шлюза (Gateway) построено на **Protobuf-дескрипторах** и реактивном **Service Discovery поверх NATS JetStream KV**.
@@ -29,6 +31,7 @@ NATS-инфраструктура разнесена по трём незави�
 * **Публикация при старте:** каждая реплика при старте записывает свой дескриптор (`RegisterDescriptors`, байты собраны через `protoset.Build`). Так новая сборка той же версии обновляет маршрут, а шлюз отбрасывает повторы по SHA-256.
 * **Самовосстановление:** пока нода жива, keep-alive раз в `TTL/3` продлевает хартбит и восстанавливает маршрут, если тот пропал.
 * **«Последний тушит свет»:** при остановке нода удаляет свой хартбит. Если других нод этой версии нет, она удаляет маршрут условным `Delete` по ревизии. Гонку с одновременно стартующей репликой это исключает: та либо видна в бакете нод, либо уже перезаписала маршрут.
+* **Чистка мёртвых маршрутов:** «последний тушит свет» предполагает graceful shutdown. Если все реплики версии упали без него (хартбиты просто истекут по TTL), маршрут деregister'ить было некому — `StartStaleRouteReaper` (запускает гейтвей, единственный постоянный потребитель маршрутов) раз в `DefaultStaleRouteReapInterval` удаляет маршруты, для которых в бакете нод не осталось ни одной живой записи, тем же условным `Delete` по ревизии.
 * **Версионирование:** токены ключей санитизируются (`1.0.0` → `1_0_0`), поколения кода изолированы при rolling update.
 
 ### 4. Динамический Gateway
@@ -71,6 +74,7 @@ NATS-инфраструктура разнесена по трём незави�
 ├── seeds/               # SQL-сиды и файловые ассеты модулей (см. seeds/README.md), в бинарь не упаковываются
 ├── Dockerfile
 ├── docker-compose.yaml  # NATS с JetStream + PostgreSQL (+ приложение в профиле app)
+├── LICENSE              # MIT
 └── Makefile
 ```
 
@@ -99,6 +103,7 @@ NATS-инфраструктура разнесена по трём незави�
 | `IDENTITY_POSTGRES_URL` | из `configs/identity.yaml` | DSN PostgreSQL для identity, схема `identity` |
 | `IDENTITY_SEEDS_DB` | из `configs/identity.yaml` (`seeds.db`) | Каталог SQL-сидов identity для `cmd/setup` |
 | `IDENTITY_SEEDS_LEVELS` | из `configs/identity.yaml` (`seeds.levels`) | Уровни сидов по порядку применения, через запятую (например `shared,development`) |
+| `IDENTITY_ANTI_ENUM_KEY` | из `configs/identity.yaml` | Hex-секрет (≥32 байта) для `srp.FakeCredentials` — защита `InitializeSession` от перечисления аккаунтов; должен совпадать на всех репликах |
 
 Пример — в `.env.example` (Makefile подхватывает `.env` автоматически).
 
@@ -168,13 +173,15 @@ func initialization(ctx context.Context) error {
 
 ## Известные ограничения
 
-* Если нода упала без graceful shutdown, её хартбит истечёт через TTL, но маршрут останется до следующего старта или остановки реплики этой версии.
 * Гейтвей находит владеющий модуль по дескриптору и пересылает запрос через NATS (`{env}.{serviceName}.{version}.rpc.{methodPath}`, см. `natsrpc.RPCSubject`/`natsrpc.ServeHandler`); `identity` подписан через `authhandler.Subscribe` (`internal/modules/identity/handlers/webapi/v1/auth.handler.go`) и реально отвечает.
-* `routeTable` при обновлении дескриптора одной версии модуля не отслеживает удаление отдельных сервисов из набора — на практике набор proto-файлов модуля в рамках одной версии статичен, так что это не ограничивает текущую реализацию.
-* **SRP-аутентификация identity** (`internal/pkg/srp`, группа 2048 бит из RFC 5054 Appendix A.3 с SHA-256 вместо SHA-1 — своя схема, совместимость с внешними SRP-клиентами не требовалась): `Register` → `InitializeSession` → `CompleteAuthentication`. Пароль не передаётся на сервер ни разу, в том числе при регистрации — TLS не входит в модель угроз: `Register` принимает уже готовые `salt`/`verifier`, вычисленные клиентом (`srp.GenerateSalt` + `srp.ComputeVerifier`), сервер их только проверяет по форме (`srp.ValidVerifier`) и хранит. Осознанные упрощения, о которых нужно знать:
-  - Нет защиты от перечисления аккаунтов: `InitializeSession` отвечает `NOT_FOUND`, если identifier не существует (как и было в исходном контракте с `exists: bool`) — по времени ответа или коду ошибки можно понять, зарегистрирован ли identifier.
-  - Challenge второго шага (`identity.auth_challenges`) не чистится по TTL фоновой задачей — просроченные строки просто перестают приниматься `ConsumeChallenge`, но физически остаются в таблице.
+* **SRP-аутентификация identity** (`internal/pkg/srp`, группа 2048 бит из RFC 5054 Appendix A.3 с SHA-256 вместо SHA-1 — своя схема, совместимость с внешними SRP-клиентами не требовалась): `Register` → `InitializeSession` → `CompleteAuthentication`. Пароль не передаётся на сервер ни разу, в том числе при регистрации — TLS не входит в модель угроз: `Register` принимает уже готовые `salt`/`verifier`, вычисленные клиентом (`srp.GenerateSalt` + `srp.ComputeVerifier`), сервер их только проверяет по форме (`srp.ValidVerifier`) и хранит. `InitializeSession` защищён от перечисления аккаунтов: для несуществующего identifier сервер без обращения к базе отвечает детерминированными фейковыми `salt`/`verifier` (`srp.FakeCredentials`, ключ — `antiEnumerationKey`), неотличимыми по форме и коду ответа от настоящего аккаунта; пройти второй шаг с ними невозможно ни при каком пароле. Challenge'и второго шага (`identity.auth_challenges`) чистятся попутно при каждой новой `InitializeSession` (не нужна отдельная фоновая задача). Осознанное упрощение, о котором нужно знать:
   - Новый пользователь получает статус `pending` (значение по умолчанию) — ничего пока не переводит его в `active`, подтверждения email/телефона нет, хотя колонка `email_verified` под это уже есть.
-  - Легаси-колонка `identity.auth.password_hash` не используется и не заполняется — аутентификация полностью на SRP.
 * Пакет `internal/pkg/minio` адаптирован для работы в этом проекте, но пока не подключён ни к одному модулю: нет ни сервиса MinIO в docker-compose, ни решения о том, что и как через него сидировать (например, аватары из `identity.profiles.avatar_url`). Поля `seeds.assets`/`assetsBucket`/`assetsTimeout` в `configs/identity.yaml` по той же причине не отражены в `configuration` и игнорируются загрузчиком конфига — туда смотрит только `seeds.db`/`seeds.levels`.
 * Миграции и сиды больше не применяются при старте модуля: `cmd/setup` (`make setup`) — отдельный разовый прогон перед раскаткой реплик, `cmd/bootstrap` (`initialization` модуля) только подключается к уже готовой схеме. На проде `make setup` нужно гонять как setup-job/init-container, завершающийся успешно до старта реплик приложения; docker-compose пока этот шаг не автоматизирует — `make setup` запускается вручную.
+* Тесты `natsdiscovery` (включая новые `TestReapStaleRoutes_*`) и `test-integration` в целом требуют реального NATS с JetStream (`NATS_TEST_URL`) — в среде, где это писалось, живого NATS не было, поэтому они проверены сборкой/`go vet` и логикой, но не прогоном; `make nats-up && make test-integration` перед тем, как полагаться на эту ветку в проде.
+
+---
+
+## Лицензия
+
+[MIT](LICENSE).

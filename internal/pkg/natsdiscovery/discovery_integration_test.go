@@ -223,6 +223,63 @@ func TestWatchRoutes(t *testing.T) {
 	}
 }
 
+// Падение без graceful shutdown: хартбит удаляется напрямую (имитирует
+// истечение TTL), Close (и тем самым деregister маршрута) никогда не
+// вызывается — ровно пробел, который должен закрывать ReapStaleRoutes.
+func TestReapStaleRoutes_RemovesRouteWithoutLiveNodes(t *testing.T) {
+	nc, js := connectTestNATS(t)
+	ctx := t.Context()
+	env := uniqueEnv()
+	log := discardLogger()
+
+	reg, err := RegisterDescriptors(ctx, nc, log, env, "identity", "1.0.0", []byte("v1"))
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	nodes, _ := js.KeyValue(ctx, NodesBucket)
+	if err := nodes.Delete(ctx, reg.nodeKey); err != nil {
+		t.Fatalf("delete node heartbeat: %v", err)
+	}
+
+	routes, _ := js.KeyValue(ctx, RoutesBucket)
+	key := routeKey(env, "identity", "1_0_0")
+	if _, err := routes.Get(ctx, key); err != nil {
+		t.Fatalf("route should still exist before reaping: %v", err)
+	}
+
+	if err := ReapStaleRoutes(ctx, nc, log, env); err != nil {
+		t.Fatalf("ReapStaleRoutes: %v", err)
+	}
+
+	if _, err := routes.Get(ctx, key); !errors.Is(err, jetstream.ErrKeyNotFound) {
+		t.Fatalf("expected stale route to be removed, got err=%v", err)
+	}
+}
+
+func TestReapStaleRoutes_KeepsRouteWithLiveNode(t *testing.T) {
+	nc, js := connectTestNATS(t)
+	ctx := t.Context()
+	env := uniqueEnv()
+	log := discardLogger()
+
+	reg, err := RegisterDescriptors(ctx, nc, log, env, "identity", "1.0.0", []byte("v1"))
+	if err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	defer reg.Close(ctx)
+
+	if err := ReapStaleRoutes(ctx, nc, log, env); err != nil {
+		t.Fatalf("ReapStaleRoutes: %v", err)
+	}
+
+	routes, _ := js.KeyValue(ctx, RoutesBucket)
+	key := routeKey(env, "identity", "1_0_0")
+	if _, err := routes.Get(ctx, key); err != nil {
+		t.Fatalf("route with a live node must survive reaping: %v", err)
+	}
+}
+
 func TestRegisterValidatesInput(t *testing.T) {
 	ctx := context.Background()
 	if _, err := RegisterDescriptors(ctx, nil, discardLogger(), "", "svc", "1.0.0", nil); err == nil {

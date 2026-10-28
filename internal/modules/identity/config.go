@@ -8,6 +8,11 @@ type configuration struct {
 	// PostgresURL — DSN вида postgres://user:password@host:5432/db.
 	PostgresURL string      `yaml:"postgresUrl" env:"IDENTITY_POSTGRES_URL" required:"true"`
 	Seeds       seedsConfig `yaml:"seeds"`
+	// AntiEnumerationKey — секрет srp.FakeCredentials (hex, минимум 32 байта
+	// = 64 hex-символа), общий для всех реплик. См. проверку длины в
+	// initialization. Для прод-окружения сгенерировать свой и хранить как
+	// секрет, а не в configs/identity.yaml.
+	AntiEnumerationKey string `yaml:"antiEnumerationKey" env:"IDENTITY_ANTI_ENUM_KEY" required:"true"`
 }
 
 // seedsConfig — настройки SQL-сидов схемы identity, применяются только
