@@ -1,32 +1,38 @@
-# Identity service seeds
+# Сиды модулей
 
-## Asset seeds
+SQL-сиды и файловые ассеты не упаковываются в бинарь — читаются с диска по
+путям из конфига модуля (`seeds.db` / `seeds.assets` в `configs/identity.yaml`).
 
-Run PostgreSQL migrations, SQL seeds, and MinIO asset seeding in one setup
-deployment Job, not from each `identity-service` replica:
+## SQL-сиды (`seeds/identity/db`)
 
-```sh
-make setup
-```
-
-The command uses `identity-service/config.yaml`. For another config path, run:
+Применяются одним разовым прогоном перед раскаткой реплик, не при старте
+каждой из них:
 
 ```sh
-go run ./identity-service/cmd/setup --config=/path/to/config.yaml
+make setup        # эквивалент go run ./cmd/setup
 ```
 
-The service startup no longer applies migrations or seeds. The reusable
-orchestration lives in `pkg/setup`; each service's small `cmd/setup` entry point
-passes its schema and embedded migration filesystem. Configure the Job to
-complete successfully before starting or rolling out application replicas.
-PostgreSQL advisory locks remain enabled as a safeguard if setup Jobs overlap.
+`cmd/setup` не поднимает NATS и не обслуживает трафик — только мигрирует и
+сидирует схему. Переиспользуемая логика лежит в `internal/pkg/postgres`
+(`Migrate`/`Seed`) и в реестре `internal/pkg/setup`: каждый модуль, у которого
+есть схема, регистрирует свою функцию подготовки в `init()`
+(`setup.Register`), а `cmd/setup` просто вызывает `setup.Run`. Сейчас это
+только `identity` — при появлении схемы у другого модуля `cmd/setup`
+достаточно дополнить blank-импортом этого модуля.
 
-Assets are read from `seeds.assets/<level>/...`, for levels listed in
-`seeds.levels` in order. The level name is omitted from each MinIO object key;
-later levels replace earlier files with the same relative path. SHA-256
-metadata avoids uploading unchanged files. Assets absent from the configured
-levels are not deleted.
+Раскладка: `<seeds.db>/<level>/*.sql`, где `level` берётся по порядку из
+`seeds.levels` конфига (например `shared`, `development`). Файлы внутри
+уровня выполняются по возрастанию имени. Учёт — в `<schema>.schema_seeds` по
+паре (level, name) с контрольной суммой: изменённый файл выполняется повторно,
+поэтому сиды должны быть идемпотентными (`INSERT ... ON CONFLICT ... DO
+UPDATE`, а не `DO NOTHING` — иначе правки в уже засеянную строку не долетят до
+базы). PostgreSQL advisory lock сериализует параллельные прогоны `make setup`.
 
-Instances that use different levels but write the same key to the same bucket
-still share that object namespace. Use separate `assetsBucket` values when
-their assets must remain isolated.
+## Файловые ассеты (MinIO) — пока не подключены
+
+`internal/pkg/minio` (`SeedAssets`) умеет читать `seeds.assets/<level>/...` по
+тем же уровням и заливать в `assetsBucket`, с оверлеем более позднего уровня
+над более ранним и SHA-256 в метаданных объекта, чтобы не перезаливать
+неизменившиеся файлы. Но ни один модуль пока не вызывает `SeedAssets`, в
+`cmd/setup` она не зарегистрирована, а в `docker-compose.yaml` нет сервиса
+MinIO — это осознанно отложено (см. «Известные ограничения» в README.md).

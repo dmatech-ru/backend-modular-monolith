@@ -4,7 +4,7 @@
 
 Взаимодействие модулей и динамического шлюза (Gateway) построено на **Protobuf-дескрипторах** и реактивном **Service Discovery поверх NATS JetStream KV**.
 
-> Статус: каркас. Discovery, жизненный цикл, HTTP-сервер шлюза, proxy-мост HTTP↔NATS и SRP-аутентификация identity (Register / InitializeSession / CompleteAuthentication) поверх PostgreSQL работают целиком.
+> Статус: каркас. Discovery, жизненный цикл, HTTP-сервер шлюза, proxy-мост HTTP↔NATS и SRP-аутентификация identity (Register / InitializeSession / CompleteAuthentication) поверх PostgreSQL работают целиком. Миграции и сиды применяются отдельным разовым прогоном (`cmd/setup`), не при старте реплики.
 
 ---
 
@@ -67,6 +67,8 @@ NATS-инфраструктура разнесена по трём незави�
 │       ├── srp/           # SRP-6a: серверная и клиентская математика (RFC 5054, SHA-256)
 │       ├── service/       # Реестр модулей рантайма, хуки остановки, общие зависимости
 │       └── setup/         # Реестр одноразовых задач подготовки окружения (миграции/сиды) для cmd/setup
+├── rest-examples/       # Примеры HTTP-запросов (humao.rest-client) к gateway/identity
+├── seeds/               # SQL-сиды и файловые ассеты модулей (см. seeds/README.md), в бинарь не упаковываются
 ├── Dockerfile
 ├── docker-compose.yaml  # NATS с JetStream + PostgreSQL (+ приложение в профиле app)
 └── Makefile
@@ -94,7 +96,9 @@ NATS-инфраструктура разнесена по трём незави�
 | `SHUTDOWN_TIMEOUT` | `15s` | Общий таймаут плавной остановки |
 | `APP_ENV` | — | `production` включает JSON-логи |
 | `GATEWAY_CONFIG_PATH`, `IDENTITY_CONFIG_PATH` | — | Пути к YAML модулей; переменные `GATEWAY_*` / `IDENTITY_*` перекрывают значения из файла |
-| `IDENTITY_POSTGRES_URL` | из `configs/identity.yaml` | DSN PostgreSQL для identity; схема `identity`, миграции применяются при старте модуля |
+| `IDENTITY_POSTGRES_URL` | из `configs/identity.yaml` | DSN PostgreSQL для identity, схема `identity` |
+| `IDENTITY_SEEDS_DB` | из `configs/identity.yaml` (`seeds.db`) | Каталог SQL-сидов identity для `cmd/setup` |
+| `IDENTITY_SEEDS_LEVELS` | из `configs/identity.yaml` (`seeds.levels`) | Уровни сидов по порядку применения, через запятую (например `shared,development`) |
 
 Пример — в `.env.example` (Makefile подхватывает `.env` автоматически).
 
