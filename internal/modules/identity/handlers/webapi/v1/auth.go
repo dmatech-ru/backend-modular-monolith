@@ -25,6 +25,7 @@ type Repository interface {
 	FindAuth(ctx context.Context, identifier string) (repository.AuthRecord, error)
 	CreateChallenge(ctx context.Context, userID *string, verifier, serverSecret, serverPublic []byte) (string, error)
 	ConsumeChallenge(ctx context.Context, challengeID string) (repository.ChallengeRecord, error)
+	GetUserStatus(ctx context.Context, userID string) (string, error)
 }
 
 // SessionIssuer выпускает access/refresh для только что вошедшего/
@@ -112,6 +113,15 @@ func (h *AuthHandler) InitializeSession(
 // выпускает access/refresh/session_info куки (см. internal/pkg/authctx и
 // identity/session.go) — это и есть момент, когда у клиента появляется
 // сессия.
+//
+// Доказательство верно — не единственное условие: сессия выпускается
+// только пользователю в статусе repository.UserStatusActive (см.
+// doc-комментарий GetUserStatus и CompleteRegistration). Проверка — здесь,
+// после проверки доказательства, не в InitializeSession: до этого момента
+// личность вызывающего не подтверждена, а раскрывать статус аккаунта
+// (например, "заблокирован") тому, кто ещё не доказал владение паролем,
+// было бы утечкой данных сродни перечислению аккаунтов, от которой защищает
+// InitializeSession (см. doc-комментарий там).
 func (h *AuthHandler) CompleteAuthentication(
 	ctx context.Context,
 	req *connect.Request[authv1.CompleteAuthenticationRequest],
@@ -142,6 +152,20 @@ func (h *AuthHandler) CompleteAuthentication(
 	// identifier (см. srp.FakeCredentials в InitializeSession); проверка
 	// доказательства с таким challenge'ом не проходит ни при каком пароле,
 	// так что сюда можно дойти только с настоящим аккаунтом.
+	status, err := h.repo.GetUserStatus(ctx, *challenge.UserID)
+	switch {
+	case errors.Is(err, repository.ErrNotFound):
+		// Аккаунт исчез между InitializeSession и CompleteAuthentication
+		// (например, конкурентное жёсткое удаление) — для вызывающего кода
+		// это то же самое, что "не активен", отдельная ветка не нужна.
+		return nil, keyedError(connect.CodeFailedPrecondition, "identity.account.not_active", "account is not active")
+	case err != nil:
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if status != repository.UserStatusActive {
+		return nil, keyedError(connect.CodeFailedPrecondition, "identity.account.not_active", "account is not active")
+	}
+
 	access, refresh, permissions, accessExpiresAt, err := h.sessions.IssueSession(ctx, *challenge.UserID, req.Header().Get("User-Agent"))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)

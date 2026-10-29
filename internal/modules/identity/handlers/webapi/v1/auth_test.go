@@ -30,6 +30,10 @@ type fakeRepository struct {
 type fakeUser struct {
 	identifier     string
 	salt, verifier []byte
+	// status — по умолчанию пустая строка; seedUser выставляет
+	// repository.UserStatusActive (как и настоящий CompleteRegistration,
+	// см. registration.go), если явно не переопределить через seedUserWithStatus.
+	status string
 }
 
 func newFakeRepository() *fakeRepository {
@@ -70,10 +74,26 @@ func (f *fakeRepository) ConsumeChallenge(_ context.Context, challengeID string)
 	return rec, nil
 }
 
+func (f *fakeRepository) GetUserStatus(_ context.Context, userID string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	u, ok := f.usersByID[userID]
+	if !ok {
+		return "", repository.ErrNotFound
+	}
+	return u.status, nil
+}
+
 // seedUser заводит пользователя прямо в фейковом хранилище — для тестов
 // SRP-входа (InitializeSession/CompleteAuthentication), которым нужен уже
 // существующий аккаунт, но не интересует сама регистрация (см. registration_test.go).
+// Статус — repository.UserStatusActive, как у настоящего CompleteRegistration
+// (см. registration.go); для сценариев с другим статусом — seedUserWithStatus.
 func (f *fakeRepository) seedUser(identifier, password string) {
+	f.seedUserWithStatus(identifier, password, repository.UserStatusActive)
+}
+
+func (f *fakeRepository) seedUserWithStatus(identifier, password, status string) {
 	salt, err := srp.GenerateSalt()
 	if err != nil {
 		panic(err) // тестовый хелпер, не часть продового пути
@@ -84,7 +104,7 @@ func (f *fakeRepository) seedUser(identifier, password string) {
 	defer f.mu.Unlock()
 	f.nextID++
 	id := fmt.Sprintf("user-%d", f.nextID)
-	f.usersByID[id] = fakeUser{identifier: identifier, salt: salt, verifier: verifier}
+	f.usersByID[id] = fakeUser{identifier: identifier, salt: salt, verifier: verifier, status: status}
 }
 
 // testAntiEnumKey — секрет srp.FakeCredentials для тестов (не для прода,
@@ -325,6 +345,26 @@ func TestAuthFlow_SuccessfulLoginSetsSessionCookies(t *testing.T) {
 		if !names[want] {
 			t.Fatalf("missing %s cookie in response, got %v", want, names)
 		}
+	}
+}
+
+// Доказательство верно, но аккаунт не активен — вход должен быть отказан
+// (см. doc-комментарий CompleteAuthentication) независимо от корректности
+// пароля.
+func TestAuthFlow_InactiveAccountIsRejectedEvenWithCorrectPassword(t *testing.T) {
+	repo := newFakeRepository()
+	h := NewAuthHandler(repo, testAntiEnumKey, newFakeSessions())
+	const identifier = "alice@example.com"
+	const password = "correct horse battery staple"
+
+	repo.seedUserWithStatus(identifier, password, repository.UserStatusBlocked)
+
+	_, err := loginAs(t, h, identifier, password)
+	if code := connectCode(t, err); code != connect.CodeFailedPrecondition {
+		t.Fatalf("code = %v, want CodeFailedPrecondition", code)
+	}
+	if key := errorKey(t, err); key != "identity.account.not_active" {
+		t.Fatalf("key = %q, want %q", key, "identity.account.not_active")
 	}
 }
 

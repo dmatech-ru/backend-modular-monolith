@@ -22,6 +22,16 @@ var (
 	ErrAlreadyExists = errors.New("repository: already exists")
 )
 
+// Значения identity.users.status (CHECK-constraint, см. миграцию 0001) —
+// именованные константы вместо магических строк в CompleteRegistration/
+// GetUserStatus и вызывающем их коде.
+const (
+	UserStatusPending = "pending"
+	UserStatusActive  = "active"
+	UserStatusBlocked = "blocked"
+	UserStatusDeleted = "deleted"
+)
+
 // challengeTTL — как долго живёт challenge второго шага SRP-аутентификации
 // после InitializeSession.
 const challengeTTL = 2 * time.Minute
@@ -121,6 +131,27 @@ func (r *Repository) ConsumeChallenge(ctx context.Context, challengeID string) (
 		return ChallengeRecord{}, fmt.Errorf("consume challenge: %w", err)
 	}
 	return rec, nil
+}
+
+// GetUserStatus возвращает identity.users.status — вызывается
+// CompleteAuthentication после успешной проверки SRP-доказательства:
+// войти может только пользователь в статусе UserStatusActive (см.
+// doc-комментарий CompleteAuthentication в auth.go). Отдельный запрос, не
+// часть ConsumeChallenge: challenge может принадлежать несуществующему
+// пользователю (анти-перечисление, см. CreateChallenge), и до проверки
+// доказательства решать, существует ли реальный аккаунт, незачем.
+func (r *Repository) GetUserStatus(ctx context.Context, userID string) (string, error) {
+	var status string
+	err := r.pool.QueryRow(ctx,
+		`SELECT status FROM identity.users WHERE id = $1::uuid`, userID,
+	).Scan(&status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("get user status: %w", err)
+	}
+	return status, nil
 }
 
 func isUniqueViolation(err error) bool {

@@ -160,6 +160,13 @@ type CompleteRegistrationParams struct {
 // шаге их негде больше взять, кроме как из того, что реально подтверждено)
 // и одной транзакцией удаляет сессию регистрации — повторный вызов с тем
 // же sessionID вернёт ErrNotFound.
+//
+// Статус нового пользователя — сразу UserStatusActive, а не дефолтный
+// UserStatusPending у identity.users: до этой строки дойти невозможно, не
+// подтвердив телефон (см. проверку phoneVerified выше) — отдельного шага
+// "активации" в проекте нет, CompleteRegistration — первый и единственный
+// момент, когда для аккаунта вообще заводится строка identity.users, и к
+// этому моменту условие активации уже выполнено.
 func (r *Repository) CompleteRegistration(ctx context.Context, sessionID string, p CompleteRegistrationParams) (string, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -189,7 +196,8 @@ func (r *Repository) CompleteRegistration(ctx context.Context, sessionID string,
 
 	var userID string
 	if err := tx.QueryRow(ctx,
-		`INSERT INTO identity.users DEFAULT VALUES RETURNING id::text`,
+		`INSERT INTO identity.users (status) VALUES ($1) RETURNING id::text`,
+		UserStatusActive,
 	).Scan(&userID); err != nil {
 		return "", fmt.Errorf("complete registration: create user: %w", err)
 	}
