@@ -7,7 +7,8 @@
 package notificationsv1
 
 import (
-	delivery "dmatech.ru/internal/pkg/contracts/webapi/v1/delivery"
+	delivery "dmatech.ru/internal/pkg/contracts/peer/common/v1/delivery"
+	templates "dmatech.ru/internal/pkg/contracts/peer/common/v1/templates"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -24,13 +25,11 @@ const (
 
 type SendRequest struct {
 	state       protoimpl.MessageState   `protogen:"open.v1"`
-	Channel     delivery.DeliveryChannel `protobuf:"varint,1,opt,name=channel,proto3,enum=webapi.delivery.v1.DeliveryChannel" json:"channel,omitempty"`
+	Channel     delivery.DeliveryChannel `protobuf:"varint,1,opt,name=channel,proto3,enum=peer.common.delivery.v1.DeliveryChannel" json:"channel,omitempty"`
 	Destination string                   `protobuf:"bytes,2,opt,name=destination,proto3" json:"destination,omitempty"`
-	// subject — заголовок; для каналов без заголовка (SMS, Telegram, MAX)
-	// игнорируется либо используется как первая строка сообщения — на
-	// усмотрение реализации конкретного провайдера.
-	Subject       string `protobuf:"bytes,3,opt,name=subject,proto3" json:"subject,omitempty"`
-	Body          string `protobuf:"bytes,4,opt,name=body,proto3" json:"body,omitempty"`
+	TemplateKey templates.TemplateKey    `protobuf:"varint,3,opt,name=template_key,json=templateKey,proto3,enum=peer.common.templates.v1.TemplateKey" json:"template_key,omitempty"`
+	// variables — подстановка в шаблон, см. комментарий сервиса.
+	Variables     map[string]string `protobuf:"bytes,4,rep,name=variables,proto3" json:"variables,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -79,18 +78,18 @@ func (x *SendRequest) GetDestination() string {
 	return ""
 }
 
-func (x *SendRequest) GetSubject() string {
+func (x *SendRequest) GetTemplateKey() templates.TemplateKey {
 	if x != nil {
-		return x.Subject
+		return x.TemplateKey
 	}
-	return ""
+	return templates.TemplateKey(0)
 }
 
-func (x *SendRequest) GetBody() string {
+func (x *SendRequest) GetVariables() map[string]string {
 	if x != nil {
-		return x.Body
+		return x.Variables
 	}
-	return ""
+	return nil
 }
 
 type SendResponse struct {
@@ -133,12 +132,15 @@ var File_peer_v1_notifications_notifications_proto protoreflect.FileDescriptor
 
 const file_peer_v1_notifications_notifications_proto_rawDesc = "" +
 	"\n" +
-	")peer/v1/notifications/notifications.proto\x12\x15peer.notifications.v1\x1a!webapi/v1/delivery/delivery.proto\"\x9c\x01\n" +
-	"\vSendRequest\x12=\n" +
-	"\achannel\x18\x01 \x01(\x0e2#.webapi.delivery.v1.DeliveryChannelR\achannel\x12 \n" +
-	"\vdestination\x18\x02 \x01(\tR\vdestination\x12\x18\n" +
-	"\asubject\x18\x03 \x01(\tR\asubject\x12\x12\n" +
-	"\x04body\x18\x04 \x01(\tR\x04body\"\x0e\n" +
+	")peer/v1/notifications/notifications.proto\x12\x15peer.notifications.v1\x1a&peer/common/v1/delivery/delivery.proto\x1a(peer/common/v1/templates/templates.proto\"\xcc\x02\n" +
+	"\vSendRequest\x12B\n" +
+	"\achannel\x18\x01 \x01(\x0e2(.peer.common.delivery.v1.DeliveryChannelR\achannel\x12 \n" +
+	"\vdestination\x18\x02 \x01(\tR\vdestination\x12H\n" +
+	"\ftemplate_key\x18\x03 \x01(\x0e2%.peer.common.templates.v1.TemplateKeyR\vtemplateKey\x12O\n" +
+	"\tvariables\x18\x04 \x03(\v21.peer.notifications.v1.SendRequest.VariablesEntryR\tvariables\x1a<\n" +
+	"\x0eVariablesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x0e\n" +
 	"\fSendResponse2f\n" +
 	"\x13NotificationService\x12O\n" +
 	"\x04Send\x12\".peer.notifications.v1.SendRequest\x1a#.peer.notifications.v1.SendResponseB\xee\x01\n" +
@@ -156,21 +158,25 @@ func file_peer_v1_notifications_notifications_proto_rawDescGZIP() []byte {
 	return file_peer_v1_notifications_notifications_proto_rawDescData
 }
 
-var file_peer_v1_notifications_notifications_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_peer_v1_notifications_notifications_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_peer_v1_notifications_notifications_proto_goTypes = []any{
 	(*SendRequest)(nil),           // 0: peer.notifications.v1.SendRequest
 	(*SendResponse)(nil),          // 1: peer.notifications.v1.SendResponse
-	(delivery.DeliveryChannel)(0), // 2: webapi.delivery.v1.DeliveryChannel
+	nil,                           // 2: peer.notifications.v1.SendRequest.VariablesEntry
+	(delivery.DeliveryChannel)(0), // 3: peer.common.delivery.v1.DeliveryChannel
+	(templates.TemplateKey)(0),    // 4: peer.common.templates.v1.TemplateKey
 }
 var file_peer_v1_notifications_notifications_proto_depIdxs = []int32{
-	2, // 0: peer.notifications.v1.SendRequest.channel:type_name -> webapi.delivery.v1.DeliveryChannel
-	0, // 1: peer.notifications.v1.NotificationService.Send:input_type -> peer.notifications.v1.SendRequest
-	1, // 2: peer.notifications.v1.NotificationService.Send:output_type -> peer.notifications.v1.SendResponse
-	2, // [2:3] is the sub-list for method output_type
-	1, // [1:2] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	3, // 0: peer.notifications.v1.SendRequest.channel:type_name -> peer.common.delivery.v1.DeliveryChannel
+	4, // 1: peer.notifications.v1.SendRequest.template_key:type_name -> peer.common.templates.v1.TemplateKey
+	2, // 2: peer.notifications.v1.SendRequest.variables:type_name -> peer.notifications.v1.SendRequest.VariablesEntry
+	0, // 3: peer.notifications.v1.NotificationService.Send:input_type -> peer.notifications.v1.SendRequest
+	1, // 4: peer.notifications.v1.NotificationService.Send:output_type -> peer.notifications.v1.SendResponse
+	4, // [4:5] is the sub-list for method output_type
+	3, // [3:4] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_peer_v1_notifications_notifications_proto_init() }
@@ -184,7 +190,7 @@ func file_peer_v1_notifications_notifications_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_peer_v1_notifications_notifications_proto_rawDesc), len(file_peer_v1_notifications_notifications_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

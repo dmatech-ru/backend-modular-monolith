@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.12
 // 	protoc        (unknown)
-// source: webapi/v1/identity/auth.proto
+// source: webapi/v1/identity/auth/auth.proto
 
 package authv1
 
@@ -30,7 +30,7 @@ type InitializeSessionRequest struct {
 
 func (x *InitializeSessionRequest) Reset() {
 	*x = InitializeSessionRequest{}
-	mi := &file_webapi_v1_identity_auth_proto_msgTypes[0]
+	mi := &file_webapi_v1_identity_auth_auth_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -42,7 +42,7 @@ func (x *InitializeSessionRequest) String() string {
 func (*InitializeSessionRequest) ProtoMessage() {}
 
 func (x *InitializeSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_auth_proto_msgTypes[0]
+	mi := &file_webapi_v1_identity_auth_auth_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55,7 +55,7 @@ func (x *InitializeSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InitializeSessionRequest.ProtoReflect.Descriptor instead.
 func (*InitializeSessionRequest) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_auth_proto_rawDescGZIP(), []int{0}
+	return file_webapi_v1_identity_auth_auth_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *InitializeSessionRequest) GetIdentifier() string {
@@ -79,7 +79,7 @@ type InitializeSessionResponse struct {
 
 func (x *InitializeSessionResponse) Reset() {
 	*x = InitializeSessionResponse{}
-	mi := &file_webapi_v1_identity_auth_proto_msgTypes[1]
+	mi := &file_webapi_v1_identity_auth_auth_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -91,7 +91,7 @@ func (x *InitializeSessionResponse) String() string {
 func (*InitializeSessionResponse) ProtoMessage() {}
 
 func (x *InitializeSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_auth_proto_msgTypes[1]
+	mi := &file_webapi_v1_identity_auth_auth_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -104,7 +104,7 @@ func (x *InitializeSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InitializeSessionResponse.ProtoReflect.Descriptor instead.
 func (*InitializeSessionResponse) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_auth_proto_rawDescGZIP(), []int{1}
+	return file_webapi_v1_identity_auth_auth_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *InitializeSessionResponse) GetSessionId() string {
@@ -141,7 +141,7 @@ type CompleteAuthenticationRequest struct {
 
 func (x *CompleteAuthenticationRequest) Reset() {
 	*x = CompleteAuthenticationRequest{}
-	mi := &file_webapi_v1_identity_auth_proto_msgTypes[2]
+	mi := &file_webapi_v1_identity_auth_auth_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -153,7 +153,7 @@ func (x *CompleteAuthenticationRequest) String() string {
 func (*CompleteAuthenticationRequest) ProtoMessage() {}
 
 func (x *CompleteAuthenticationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_auth_proto_msgTypes[2]
+	mi := &file_webapi_v1_identity_auth_auth_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -166,7 +166,7 @@ func (x *CompleteAuthenticationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteAuthenticationRequest.ProtoReflect.Descriptor instead.
 func (*CompleteAuthenticationRequest) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_auth_proto_rawDescGZIP(), []int{2}
+	return file_webapi_v1_identity_auth_auth_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *CompleteAuthenticationRequest) GetSessionId() string {
@@ -201,7 +201,7 @@ type CompleteAuthenticationResponse struct {
 
 func (x *CompleteAuthenticationResponse) Reset() {
 	*x = CompleteAuthenticationResponse{}
-	mi := &file_webapi_v1_identity_auth_proto_msgTypes[3]
+	mi := &file_webapi_v1_identity_auth_auth_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -213,7 +213,7 @@ func (x *CompleteAuthenticationResponse) String() string {
 func (*CompleteAuthenticationResponse) ProtoMessage() {}
 
 func (x *CompleteAuthenticationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_auth_proto_msgTypes[3]
+	mi := &file_webapi_v1_identity_auth_auth_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -226,7 +226,7 @@ func (x *CompleteAuthenticationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteAuthenticationResponse.ProtoReflect.Descriptor instead.
 func (*CompleteAuthenticationResponse) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_auth_proto_rawDescGZIP(), []int{3}
+	return file_webapi_v1_identity_auth_auth_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *CompleteAuthenticationResponse) GetServerProof() []byte {
@@ -236,11 +236,11 @@ func (x *CompleteAuthenticationResponse) GetServerProof() []byte {
 	return nil
 }
 
-var File_webapi_v1_identity_auth_proto protoreflect.FileDescriptor
+var File_webapi_v1_identity_auth_auth_proto protoreflect.FileDescriptor
 
-const file_webapi_v1_identity_auth_proto_rawDesc = "" +
+const file_webapi_v1_identity_auth_auth_proto_rawDesc = "" +
 	"\n" +
-	"\x1dwebapi/v1/identity/auth.proto\x12\x17webapi.identity.auth.v1\":\n" +
+	"\"webapi/v1/identity/auth/auth.proto\x12\x17webapi.identity.auth.v1\":\n" +
 	"\x18InitializeSessionRequest\x12\x1e\n" +
 	"\n" +
 	"identifier\x18\x01 \x01(\tR\n" +
@@ -259,29 +259,29 @@ const file_webapi_v1_identity_auth_proto_rawDesc = "" +
 	"\fserver_proof\x18\x01 \x01(\fR\vserverProof2\x9d\x02\n" +
 	"\x13IdentityAuthService\x12z\n" +
 	"\x11InitializeSession\x121.webapi.identity.auth.v1.InitializeSessionRequest\x1a2.webapi.identity.auth.v1.InitializeSessionResponse\x12\x89\x01\n" +
-	"\x16CompleteAuthentication\x126.webapi.identity.auth.v1.CompleteAuthenticationRequest\x1a7.webapi.identity.auth.v1.CompleteAuthenticationResponseB\xe4\x01\n" +
-	"\x1bcom.webapi.identity.auth.v1B\tAuthProtoP\x01Z;dmatech.ru/internal/pkg/contracts/webapi/v1/identity;authv1\xa2\x02\x03WIA\xaa\x02\x17Webapi.Identity.Auth.V1\xca\x02\x17Webapi\\Identity\\Auth\\V1\xe2\x02#Webapi\\Identity\\Auth\\V1\\GPBMetadata\xea\x02\x1aWebapi::Identity::Auth::V1b\x06proto3"
+	"\x16CompleteAuthentication\x126.webapi.identity.auth.v1.CompleteAuthenticationRequest\x1a7.webapi.identity.auth.v1.CompleteAuthenticationResponseB\xe9\x01\n" +
+	"\x1bcom.webapi.identity.auth.v1B\tAuthProtoP\x01Z@dmatech.ru/internal/pkg/contracts/webapi/v1/identity/auth;authv1\xa2\x02\x03WIA\xaa\x02\x17Webapi.Identity.Auth.V1\xca\x02\x17Webapi\\Identity\\Auth\\V1\xe2\x02#Webapi\\Identity\\Auth\\V1\\GPBMetadata\xea\x02\x1aWebapi::Identity::Auth::V1b\x06proto3"
 
 var (
-	file_webapi_v1_identity_auth_proto_rawDescOnce sync.Once
-	file_webapi_v1_identity_auth_proto_rawDescData []byte
+	file_webapi_v1_identity_auth_auth_proto_rawDescOnce sync.Once
+	file_webapi_v1_identity_auth_auth_proto_rawDescData []byte
 )
 
-func file_webapi_v1_identity_auth_proto_rawDescGZIP() []byte {
-	file_webapi_v1_identity_auth_proto_rawDescOnce.Do(func() {
-		file_webapi_v1_identity_auth_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_webapi_v1_identity_auth_proto_rawDesc), len(file_webapi_v1_identity_auth_proto_rawDesc)))
+func file_webapi_v1_identity_auth_auth_proto_rawDescGZIP() []byte {
+	file_webapi_v1_identity_auth_auth_proto_rawDescOnce.Do(func() {
+		file_webapi_v1_identity_auth_auth_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_webapi_v1_identity_auth_auth_proto_rawDesc), len(file_webapi_v1_identity_auth_auth_proto_rawDesc)))
 	})
-	return file_webapi_v1_identity_auth_proto_rawDescData
+	return file_webapi_v1_identity_auth_auth_proto_rawDescData
 }
 
-var file_webapi_v1_identity_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
-var file_webapi_v1_identity_auth_proto_goTypes = []any{
+var file_webapi_v1_identity_auth_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_webapi_v1_identity_auth_auth_proto_goTypes = []any{
 	(*InitializeSessionRequest)(nil),       // 0: webapi.identity.auth.v1.InitializeSessionRequest
 	(*InitializeSessionResponse)(nil),      // 1: webapi.identity.auth.v1.InitializeSessionResponse
 	(*CompleteAuthenticationRequest)(nil),  // 2: webapi.identity.auth.v1.CompleteAuthenticationRequest
 	(*CompleteAuthenticationResponse)(nil), // 3: webapi.identity.auth.v1.CompleteAuthenticationResponse
 }
-var file_webapi_v1_identity_auth_proto_depIdxs = []int32{
+var file_webapi_v1_identity_auth_auth_proto_depIdxs = []int32{
 	0, // 0: webapi.identity.auth.v1.IdentityAuthService.InitializeSession:input_type -> webapi.identity.auth.v1.InitializeSessionRequest
 	2, // 1: webapi.identity.auth.v1.IdentityAuthService.CompleteAuthentication:input_type -> webapi.identity.auth.v1.CompleteAuthenticationRequest
 	1, // 2: webapi.identity.auth.v1.IdentityAuthService.InitializeSession:output_type -> webapi.identity.auth.v1.InitializeSessionResponse
@@ -293,26 +293,26 @@ var file_webapi_v1_identity_auth_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for field type_name
 }
 
-func init() { file_webapi_v1_identity_auth_proto_init() }
-func file_webapi_v1_identity_auth_proto_init() {
-	if File_webapi_v1_identity_auth_proto != nil {
+func init() { file_webapi_v1_identity_auth_auth_proto_init() }
+func file_webapi_v1_identity_auth_auth_proto_init() {
+	if File_webapi_v1_identity_auth_auth_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_webapi_v1_identity_auth_proto_rawDesc), len(file_webapi_v1_identity_auth_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_webapi_v1_identity_auth_auth_proto_rawDesc), len(file_webapi_v1_identity_auth_auth_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_webapi_v1_identity_auth_proto_goTypes,
-		DependencyIndexes: file_webapi_v1_identity_auth_proto_depIdxs,
-		MessageInfos:      file_webapi_v1_identity_auth_proto_msgTypes,
+		GoTypes:           file_webapi_v1_identity_auth_auth_proto_goTypes,
+		DependencyIndexes: file_webapi_v1_identity_auth_auth_proto_depIdxs,
+		MessageInfos:      file_webapi_v1_identity_auth_auth_proto_msgTypes,
 	}.Build()
-	File_webapi_v1_identity_auth_proto = out.File
-	file_webapi_v1_identity_auth_proto_goTypes = nil
-	file_webapi_v1_identity_auth_proto_depIdxs = nil
+	File_webapi_v1_identity_auth_auth_proto = out.File
+	file_webapi_v1_identity_auth_auth_proto_goTypes = nil
+	file_webapi_v1_identity_auth_auth_proto_depIdxs = nil
 }

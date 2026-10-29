@@ -2,11 +2,11 @@ syntax = "proto3";
 
 package webapi.identity.auth.v1;
 
-option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity;authv1";
+option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity/auth;authv1";
 
 // IdentityAuthService — только SRP-вход для уже существующих аккаунтов.
 // Регистрация — отдельный, многошаговый контракт, см.
-// IdentityRegistrationService в registration.proto того же пакета (бывший
+// IdentityRegistrationService в registration.proto (свой пакет, см. там; бывший
 // одношаговый Register здесь заменён её CompleteRegistration: он не
 // проверял владение телефоном/почтой вообще).
 service IdentityAuthService {

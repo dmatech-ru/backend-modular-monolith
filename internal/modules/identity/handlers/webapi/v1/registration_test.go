@@ -10,7 +10,7 @@ import (
 	"connectrpc.com/connect"
 
 	"dmatech.ru/internal/modules/identity/repository"
-	identityv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity"
+	registrationv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/registration"
 	"dmatech.ru/internal/pkg/srp"
 )
 
@@ -194,13 +194,13 @@ func newTestRegistrationHandler(approveCaptcha bool) (*RegistrationHandler, *fak
 func TestCheckIdentifier_RequiresCaptchaWhenNotSolved(t *testing.T) {
 	h, _, _, _ := newTestRegistrationHandler(false)
 
-	resp, err := h.CheckIdentifier(context.Background(), connect.NewRequest(&identityv1.CheckIdentifierRequest{
+	resp, err := h.CheckIdentifier(context.Background(), connect.NewRequest(&registrationv1.CheckIdentifierRequest{
 		Identifier: "alice@example.com",
 	}))
 	if err != nil {
 		t.Fatalf("CheckIdentifier: %v", err)
 	}
-	if resp.Msg.GetStatus() != identityv1.CheckIdentifierResponse_STATUS_CAPTCHA_REQUIRED {
+	if resp.Msg.GetStatus() != registrationv1.CheckIdentifierResponse_STATUS_CAPTCHA_REQUIRED {
 		t.Fatalf("status = %v, want STATUS_CAPTCHA_REQUIRED", resp.Msg.GetStatus())
 	}
 }
@@ -209,23 +209,23 @@ func TestCheckIdentifier_ExistsAndNotFound(t *testing.T) {
 	h, repo, _, _ := newTestRegistrationHandler(true)
 	repo.existingIdentifiers["alice@example.com"] = true
 
-	resp, err := h.CheckIdentifier(context.Background(), connect.NewRequest(&identityv1.CheckIdentifierRequest{
+	resp, err := h.CheckIdentifier(context.Background(), connect.NewRequest(&registrationv1.CheckIdentifierRequest{
 		Identifier: "alice@example.com", PowChallenge: "c", PowNonce: "n",
 	}))
 	if err != nil {
 		t.Fatalf("CheckIdentifier: %v", err)
 	}
-	if resp.Msg.GetStatus() != identityv1.CheckIdentifierResponse_STATUS_EXISTS {
+	if resp.Msg.GetStatus() != registrationv1.CheckIdentifierResponse_STATUS_EXISTS {
 		t.Fatalf("status = %v, want STATUS_EXISTS", resp.Msg.GetStatus())
 	}
 
-	resp, err = h.CheckIdentifier(context.Background(), connect.NewRequest(&identityv1.CheckIdentifierRequest{
+	resp, err = h.CheckIdentifier(context.Background(), connect.NewRequest(&registrationv1.CheckIdentifierRequest{
 		Identifier: "bob@example.com", PowChallenge: "c", PowNonce: "n",
 	}))
 	if err != nil {
 		t.Fatalf("CheckIdentifier: %v", err)
 	}
-	if resp.Msg.GetStatus() != identityv1.CheckIdentifierResponse_STATUS_NOT_FOUND {
+	if resp.Msg.GetStatus() != registrationv1.CheckIdentifierResponse_STATUS_NOT_FOUND {
 		t.Fatalf("status = %v, want STATUS_NOT_FOUND", resp.Msg.GetStatus())
 	}
 }
@@ -233,7 +233,7 @@ func TestCheckIdentifier_ExistsAndNotFound(t *testing.T) {
 func TestStartPhoneVerification_RequiresConsent(t *testing.T) {
 	h, _, _, _ := newTestRegistrationHandler(true)
 
-	_, err := h.StartPhoneVerification(context.Background(), connect.NewRequest(&identityv1.StartPhoneVerificationRequest{
+	_, err := h.StartPhoneVerification(context.Background(), connect.NewRequest(&registrationv1.StartPhoneVerificationRequest{
 		Phone: "+70000000000", PersonalDataConsent: false, PowChallenge: "c", PowNonce: "n",
 	}))
 	if code := connectCode(t, err); code != connect.CodeInvalidArgument {
@@ -245,7 +245,7 @@ func TestStartPhoneVerification_RejectsExistingPhone(t *testing.T) {
 	h, repo, _, _ := newTestRegistrationHandler(true)
 	repo.phones["+70000000000"] = true
 
-	_, err := h.StartPhoneVerification(context.Background(), connect.NewRequest(&identityv1.StartPhoneVerificationRequest{
+	_, err := h.StartPhoneVerification(context.Background(), connect.NewRequest(&registrationv1.StartPhoneVerificationRequest{
 		Phone: "+70000000000", PersonalDataConsent: true, PowChallenge: "c", PowNonce: "n",
 	}))
 	if code := connectCode(t, err); code != connect.CodeAlreadyExists {
@@ -256,13 +256,13 @@ func TestStartPhoneVerification_RejectsExistingPhone(t *testing.T) {
 func TestStartPhoneVerification_SendsCodeAndCreatesSession(t *testing.T) {
 	h, _, phones, _ := newTestRegistrationHandler(true)
 
-	resp, err := h.StartPhoneVerification(context.Background(), connect.NewRequest(&identityv1.StartPhoneVerificationRequest{
+	resp, err := h.StartPhoneVerification(context.Background(), connect.NewRequest(&registrationv1.StartPhoneVerificationRequest{
 		Phone: "+70000000000", PersonalDataConsent: true, PowChallenge: "c", PowNonce: "n",
 	}))
 	if err != nil {
 		t.Fatalf("StartPhoneVerification: %v", err)
 	}
-	if resp.Msg.GetStatus() != identityv1.StartPhoneVerificationResponse_STATUS_STARTED {
+	if resp.Msg.GetStatus() != registrationv1.StartPhoneVerificationResponse_STATUS_STARTED {
 		t.Fatalf("status = %v, want STATUS_STARTED", resp.Msg.GetStatus())
 	}
 	if resp.Msg.GetRegistrationSessionId() == "" {
@@ -279,7 +279,7 @@ func fullRegistrationUpToPhone(t *testing.T, h *RegistrationHandler, phones *fak
 	t.Helper()
 	ctx := context.Background()
 
-	startResp, err := h.StartPhoneVerification(ctx, connect.NewRequest(&identityv1.StartPhoneVerificationRequest{
+	startResp, err := h.StartPhoneVerification(ctx, connect.NewRequest(&registrationv1.StartPhoneVerificationRequest{
 		Phone: phone, PersonalDataConsent: true, PowChallenge: "c", PowNonce: "n",
 	}))
 	if err != nil {
@@ -288,7 +288,7 @@ func fullRegistrationUpToPhone(t *testing.T, h *RegistrationHandler, phones *fak
 	sessionID := startResp.Msg.GetRegistrationSessionId()
 	code := phones.codeFor(phone)
 
-	if _, err := h.ConfirmPhoneVerification(ctx, connect.NewRequest(&identityv1.ConfirmPhoneVerificationRequest{
+	if _, err := h.ConfirmPhoneVerification(ctx, connect.NewRequest(&registrationv1.ConfirmPhoneVerificationRequest{
 		RegistrationSessionId: sessionID, Code: code,
 	})); err != nil {
 		t.Fatalf("ConfirmPhoneVerification: %v", err)
@@ -300,7 +300,7 @@ func TestConfirmPhoneVerification_WrongCodeThenTooManyAttempts(t *testing.T) {
 	h, _, phones, _ := newTestRegistrationHandler(true)
 	ctx := context.Background()
 
-	startResp, err := h.StartPhoneVerification(ctx, connect.NewRequest(&identityv1.StartPhoneVerificationRequest{
+	startResp, err := h.StartPhoneVerification(ctx, connect.NewRequest(&registrationv1.StartPhoneVerificationRequest{
 		Phone: "+70000000000", PersonalDataConsent: true, PowChallenge: "c", PowNonce: "n",
 	}))
 	if err != nil {
@@ -311,7 +311,7 @@ func TestConfirmPhoneVerification_WrongCodeThenTooManyAttempts(t *testing.T) {
 
 	var lastErr error
 	for i := 0; i < fakeMaxCodeAttempts; i++ {
-		_, lastErr = h.ConfirmPhoneVerification(ctx, connect.NewRequest(&identityv1.ConfirmPhoneVerificationRequest{
+		_, lastErr = h.ConfirmPhoneVerification(ctx, connect.NewRequest(&registrationv1.ConfirmPhoneVerificationRequest{
 			RegistrationSessionId: sessionID, Code: "000000",
 		}))
 		if code := connectCode(t, lastErr); code != connect.CodeUnauthenticated {
@@ -319,7 +319,7 @@ func TestConfirmPhoneVerification_WrongCodeThenTooManyAttempts(t *testing.T) {
 		}
 	}
 
-	_, err = h.ConfirmPhoneVerification(ctx, connect.NewRequest(&identityv1.ConfirmPhoneVerificationRequest{
+	_, err = h.ConfirmPhoneVerification(ctx, connect.NewRequest(&registrationv1.ConfirmPhoneVerificationRequest{
 		RegistrationSessionId: sessionID, Code: "000000",
 	}))
 	if code := connectCode(t, err); code != connect.CodeResourceExhausted {
@@ -331,7 +331,7 @@ func TestStartEmailVerification_RequiresPhoneVerifiedFirst(t *testing.T) {
 	h, _, phones, _ := newTestRegistrationHandler(true)
 	ctx := context.Background()
 
-	startResp, err := h.StartPhoneVerification(ctx, connect.NewRequest(&identityv1.StartPhoneVerificationRequest{
+	startResp, err := h.StartPhoneVerification(ctx, connect.NewRequest(&registrationv1.StartPhoneVerificationRequest{
 		Phone: "+70000000000", PersonalDataConsent: true, PowChallenge: "c", PowNonce: "n",
 	}))
 	if err != nil {
@@ -339,7 +339,7 @@ func TestStartEmailVerification_RequiresPhoneVerifiedFirst(t *testing.T) {
 	}
 	_ = phones
 
-	_, err = h.StartEmailVerification(ctx, connect.NewRequest(&identityv1.StartEmailVerificationRequest{
+	_, err = h.StartEmailVerification(ctx, connect.NewRequest(&registrationv1.StartEmailVerificationRequest{
 		RegistrationSessionId: startResp.Msg.GetRegistrationSessionId(),
 		Email:                 "alice@example.com", PowChallenge: "c", PowNonce: "n",
 	}))
@@ -353,7 +353,7 @@ func TestStartEmailVerification_RejectsExistingEmail(t *testing.T) {
 	repo.emails["alice@example.com"] = true
 	sessionID := fullRegistrationUpToPhone(t, h, phones, "+70000000000")
 
-	_, err := h.StartEmailVerification(context.Background(), connect.NewRequest(&identityv1.StartEmailVerificationRequest{
+	_, err := h.StartEmailVerification(context.Background(), connect.NewRequest(&registrationv1.StartEmailVerificationRequest{
 		RegistrationSessionId: sessionID, Email: "alice@example.com", PowChallenge: "c", PowNonce: "n",
 	}))
 	if code := connectCode(t, err); code != connect.CodeAlreadyExists {
@@ -368,7 +368,7 @@ func TestCompleteRegistration_RequiresEmailVerified(t *testing.T) {
 	salt, _ := srp.GenerateSalt()
 	verifier := srp.ComputeVerifier("alice@example.com", "correct horse battery staple", salt)
 
-	_, err := h.CompleteRegistration(context.Background(), connect.NewRequest(&identityv1.CompleteRegistrationRequest{
+	_, err := h.CompleteRegistration(context.Background(), connect.NewRequest(&registrationv1.CompleteRegistrationRequest{
 		RegistrationSessionId: sessionID, Salt: salt, Verifier: verifier,
 	}))
 	if code := connectCode(t, err); code != connect.CodeFailedPrecondition {
@@ -383,13 +383,13 @@ func TestRegistrationFlow_EndToEndSucceeds(t *testing.T) {
 	const password = "correct horse battery staple"
 
 	// Шаг 0: аккаунта ещё нет.
-	checkResp, err := h.CheckIdentifier(ctx, connect.NewRequest(&identityv1.CheckIdentifierRequest{
+	checkResp, err := h.CheckIdentifier(ctx, connect.NewRequest(&registrationv1.CheckIdentifierRequest{
 		Identifier: email, PowChallenge: "c", PowNonce: "n",
 	}))
 	if err != nil {
 		t.Fatalf("CheckIdentifier: %v", err)
 	}
-	if checkResp.Msg.GetStatus() != identityv1.CheckIdentifierResponse_STATUS_NOT_FOUND {
+	if checkResp.Msg.GetStatus() != registrationv1.CheckIdentifierResponse_STATUS_NOT_FOUND {
 		t.Fatalf("status = %v, want STATUS_NOT_FOUND", checkResp.Msg.GetStatus())
 	}
 
@@ -397,7 +397,7 @@ func TestRegistrationFlow_EndToEndSucceeds(t *testing.T) {
 	sessionID := fullRegistrationUpToPhone(t, h, phones, phone)
 
 	// Шаг 3: email.
-	if _, err := h.StartEmailVerification(ctx, connect.NewRequest(&identityv1.StartEmailVerificationRequest{
+	if _, err := h.StartEmailVerification(ctx, connect.NewRequest(&registrationv1.StartEmailVerificationRequest{
 		RegistrationSessionId: sessionID, Email: email, PowChallenge: "c", PowNonce: "n",
 	})); err != nil {
 		t.Fatalf("StartEmailVerification: %v", err)
@@ -405,7 +405,7 @@ func TestRegistrationFlow_EndToEndSucceeds(t *testing.T) {
 
 	// Шаг 4: подтверждение email.
 	emailCode := emails.codeFor(email)
-	if _, err := h.ConfirmEmailVerification(ctx, connect.NewRequest(&identityv1.ConfirmEmailVerificationRequest{
+	if _, err := h.ConfirmEmailVerification(ctx, connect.NewRequest(&registrationv1.ConfirmEmailVerificationRequest{
 		RegistrationSessionId: sessionID, Code: emailCode,
 	})); err != nil {
 		t.Fatalf("ConfirmEmailVerification: %v", err)
@@ -418,7 +418,7 @@ func TestRegistrationFlow_EndToEndSucceeds(t *testing.T) {
 	}
 	verifier := srp.ComputeVerifier(email, password, salt)
 
-	completeResp, err := h.CompleteRegistration(ctx, connect.NewRequest(&identityv1.CompleteRegistrationRequest{
+	completeResp, err := h.CompleteRegistration(ctx, connect.NewRequest(&registrationv1.CompleteRegistrationRequest{
 		RegistrationSessionId: sessionID, Salt: salt, Verifier: verifier, FirstName: "Alice",
 	}))
 	if err != nil {
@@ -429,7 +429,7 @@ func TestRegistrationFlow_EndToEndSucceeds(t *testing.T) {
 	}
 
 	// Повторный вызов с той же сессией — она одноразовая.
-	_, err = h.CompleteRegistration(ctx, connect.NewRequest(&identityv1.CompleteRegistrationRequest{
+	_, err = h.CompleteRegistration(ctx, connect.NewRequest(&registrationv1.CompleteRegistrationRequest{
 		RegistrationSessionId: sessionID, Salt: salt, Verifier: verifier,
 	}))
 	if code := connectCode(t, err); code != connect.CodeNotFound {

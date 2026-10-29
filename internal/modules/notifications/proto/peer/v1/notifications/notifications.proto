@@ -4,10 +4,11 @@ package peer.notifications.v1;
 
 option go_package = "dmatech.ru/internal/modules/notifications/proto/peer/v1/notifications;notificationsv1";
 
-import "webapi/v1/delivery/delivery.proto";
+import "peer/common/v1/delivery/delivery.proto";
+import "peer/common/v1/templates/templates.proto";
 
 // NotificationService — единственный способ отправить сообщение по одному
-// из webapi.delivery.v1.DeliveryChannel. Только peer, без webapi: это не
+// из peer.common.delivery.v1.DeliveryChannel. Только peer, без webapi: это не
 // браузерный контракт — его вызывают другие модули по NATS напрямую (как
 // identity вызывает peer.captcha.v1.CaptchaService, см. комментарий там и
 // internal/pkg/natsrpc.Client). Сегодня единственный ожидаемый вызывающий —
@@ -29,20 +30,27 @@ import "webapi/v1/delivery/delivery.proto";
 // доставку у провайдера), либо возвращает ошибку сразу — NOT_FOUND, если
 // для DELIVERY_CHANNEL_TELEGRAM/DELIVERY_CHANNEL_MAX чат для этого номера
 // ещё не резолвился (пользователь не писал боту), INVALID_ARGUMENT —
-// некорректный destination для канала, INTERNAL — отказ провайдера
-// (SMS-гейтвей, почтовый релей и т.п.).
+// некорректный destination для канала или неизвестный template_key,
+// INTERNAL — отказ провайдера (SMS-гейтвей, почтовый релей и т.п.).
+//
+// Текста сообщения (subject/body) в контракте намеренно нет: вызывающий
+// код не выбирает формулировки, только template_key (peer.common.templates.v1,
+// общий enum — не строка, чтобы опечатка в имени шаблона была ошибкой
+// компиляции, а не ошибкой во время выполнения) и variables для подстановки.
+// Сам текст — файлы шаблонов внутри notifications
+// (internal/modules/notifications/template), html/template для email
+// (автоэскейпинг — защита от HTML-инъекции через переменную) и
+// text/template для SMS/Telegram/MAX.
 service NotificationService {
   rpc Send (SendRequest) returns (SendResponse);
 }
 
 message SendRequest {
-  webapi.delivery.v1.DeliveryChannel channel = 1;
+  peer.common.delivery.v1.DeliveryChannel channel = 1;
   string destination = 2;
-  // subject — заголовок; для каналов без заголовка (SMS, Telegram, MAX)
-  // игнорируется либо используется как первая строка сообщения — на
-  // усмотрение реализации конкретного провайдера.
-  string subject = 3;
-  string body = 4;
+  peer.common.templates.v1.TemplateKey template_key = 3;
+  // variables — подстановка в шаблон, см. комментарий сервиса.
+  map<string, string> variables = 4;
 }
 
 message SendResponse {}

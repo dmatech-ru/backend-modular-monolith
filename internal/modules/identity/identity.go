@@ -11,7 +11,9 @@ import (
 
 	authhandler "dmatech.ru/internal/modules/identity/handlers/webapi/v1"
 	identityrepo "dmatech.ru/internal/modules/identity/repository"
-	authv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity"
+	authv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/auth"
+	recoveryv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/recovery"
+	registrationv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/registration"
 
 	"dmatech.ru/internal/pkg/config"
 	"dmatech.ru/internal/pkg/logger"
@@ -32,6 +34,11 @@ const (
 
 	// captchaCallTimeout — таймаут одного вызова captcha-модуля по NATS.
 	captchaCallTimeout = 5 * time.Second
+	// notificationsCallTimeout — таймаут одного вызова notifications-модуля
+	// по NATS. Это только постановка в очередь (см. doc-комментарий
+	// NotificationService), а не ожидание реальной доставки — короткого
+	// таймаута достаточно.
+	notificationsCallTimeout = 5 * time.Second
 )
 
 // decodeAntiEnumKey декодирует antiEnumerationKey из конфига и проверяет его
@@ -80,8 +87,9 @@ func initialization(ctx context.Context) error {
 	})
 
 	descriptorBytes, err := protoset.Build(
-		authv1.File_webapi_v1_identity_auth_proto,
-		authv1.File_webapi_v1_identity_registration_proto,
+		authv1.File_webapi_v1_identity_auth_auth_proto,
+		registrationv1.File_webapi_v1_identity_registration_registration_proto,
+		recoveryv1.File_webapi_v1_identity_recovery_recovery_proto,
 	)
 	if err != nil {
 		return fmt.Errorf("identity: failed to build descriptor set: %w", err)
@@ -95,11 +103,15 @@ func initialization(ctx context.Context) error {
 
 	repo := identityrepo.New(pool)
 	captcha := newCaptchaClient(nc, cfg.Env, cfg.CaptchaServiceName, cfg.CaptchaServiceVersion)
-	phones := &logSender{log: log, kind: "phone"}
-	emails := &logSender{log: log, kind: "email"}
+	notifications := newNotificationsClient(nc, cfg.Env, cfg.NotificationsServiceName, cfg.NotificationsServiceVersion)
+	phones := &otpPhoneSender{client: notifications}
+	emails := &otpEmailSender{client: notifications}
+	recoveryCodes := &recoveryCodeSender{client: notifications}
+	passwordResetFreeze := time.Duration(cfg.PasswordResetFreezeHours) * time.Hour
 
 	sub, err := authhandler.Subscribe(nc, log, cfg.Env, cfg.ServiceName, cfg.AppVersion,
-		repo, antiEnumKey, repo, captcha, phones, emails)
+		repo, antiEnumKey, repo, captcha, phones, emails,
+		repo, recoveryCodes, passwordResetFreeze)
 	if err != nil {
 		return fmt.Errorf("failed to subscribe identity services: %w", err)
 	}

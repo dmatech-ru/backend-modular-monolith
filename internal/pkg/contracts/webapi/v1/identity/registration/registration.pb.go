@@ -2,9 +2,9 @@
 // versions:
 // 	protoc-gen-go v1.36.12
 // 	protoc        (unknown)
-// source: webapi/v1/identity/registration.proto
+// source: webapi/v1/identity/registration/registration.proto
 
-package authv1
+package registrationv1
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -62,11 +62,11 @@ func (x CheckIdentifierResponse_Status) String() string {
 }
 
 func (CheckIdentifierResponse_Status) Descriptor() protoreflect.EnumDescriptor {
-	return file_webapi_v1_identity_registration_proto_enumTypes[0].Descriptor()
+	return file_webapi_v1_identity_registration_registration_proto_enumTypes[0].Descriptor()
 }
 
 func (CheckIdentifierResponse_Status) Type() protoreflect.EnumType {
-	return &file_webapi_v1_identity_registration_proto_enumTypes[0]
+	return &file_webapi_v1_identity_registration_registration_proto_enumTypes[0]
 }
 
 func (x CheckIdentifierResponse_Status) Number() protoreflect.EnumNumber {
@@ -75,7 +75,7 @@ func (x CheckIdentifierResponse_Status) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use CheckIdentifierResponse_Status.Descriptor instead.
 func (CheckIdentifierResponse_Status) EnumDescriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_registration_proto_rawDescGZIP(), []int{1, 0}
+	return file_webapi_v1_identity_registration_registration_proto_rawDescGZIP(), []int{1, 0}
 }
 
 type StartPhoneVerificationResponse_Status int32
@@ -111,11 +111,11 @@ func (x StartPhoneVerificationResponse_Status) String() string {
 }
 
 func (StartPhoneVerificationResponse_Status) Descriptor() protoreflect.EnumDescriptor {
-	return file_webapi_v1_identity_registration_proto_enumTypes[1].Descriptor()
+	return file_webapi_v1_identity_registration_registration_proto_enumTypes[1].Descriptor()
 }
 
 func (StartPhoneVerificationResponse_Status) Type() protoreflect.EnumType {
-	return &file_webapi_v1_identity_registration_proto_enumTypes[1]
+	return &file_webapi_v1_identity_registration_registration_proto_enumTypes[1]
 }
 
 func (x StartPhoneVerificationResponse_Status) Number() protoreflect.EnumNumber {
@@ -124,7 +124,7 @@ func (x StartPhoneVerificationResponse_Status) Number() protoreflect.EnumNumber 
 
 // Deprecated: Use StartPhoneVerificationResponse_Status.Descriptor instead.
 func (StartPhoneVerificationResponse_Status) EnumDescriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_registration_proto_rawDescGZIP(), []int{3, 0}
+	return file_webapi_v1_identity_registration_registration_proto_rawDescGZIP(), []int{3, 0}
 }
 
 type StartEmailVerificationResponse_Status int32
@@ -160,11 +160,11 @@ func (x StartEmailVerificationResponse_Status) String() string {
 }
 
 func (StartEmailVerificationResponse_Status) Descriptor() protoreflect.EnumDescriptor {
-	return file_webapi_v1_identity_registration_proto_enumTypes[2].Descriptor()
+	return file_webapi_v1_identity_registration_registration_proto_enumTypes[2].Descriptor()
 }
 
 func (StartEmailVerificationResponse_Status) Type() protoreflect.EnumType {
-	return &file_webapi_v1_identity_registration_proto_enumTypes[2]
+	return &file_webapi_v1_identity_registration_registration_proto_enumTypes[2]
 }
 
 func (x StartEmailVerificationResponse_Status) Number() protoreflect.EnumNumber {
@@ -173,7 +173,7 @@ func (x StartEmailVerificationResponse_Status) Number() protoreflect.EnumNumber 
 
 // Deprecated: Use StartEmailVerificationResponse_Status.Descriptor instead.
 func (StartEmailVerificationResponse_Status) EnumDescriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_registration_proto_rawDescGZIP(), []int{7, 0}
+	return file_webapi_v1_identity_registration_registration_proto_rawDescGZIP(), []int{7, 0}
 }
 
 type CheckIdentifierRequest struct {
@@ -193,7 +193,7 @@ type CheckIdentifierRequest struct {
 
 func (x *CheckIdentifierRequest) Reset() {
 	*x = CheckIdentifierRequest{}
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[0]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -205,7 +205,7 @@ func (x *CheckIdentifierRequest) String() string {
 func (*CheckIdentifierRequest) ProtoMessage() {}
 
 func (x *CheckIdentifierRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[0]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -218,7 +218,7 @@ func (x *CheckIdentifierRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckIdentifierRequest.ProtoReflect.Descriptor instead.
 func (*CheckIdentifierRequest) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_registration_proto_rawDescGZIP(), []int{0}
+	return file_webapi_v1_identity_registration_registration_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *CheckIdentifierRequest) GetIdentifier() string {
@@ -244,14 +244,14 @@ func (x *CheckIdentifierRequest) GetPowNonce() string {
 
 type CheckIdentifierResponse struct {
 	state         protoimpl.MessageState         `protogen:"open.v1"`
-	Status        CheckIdentifierResponse_Status `protobuf:"varint,1,opt,name=status,proto3,enum=webapi.identity.auth.v1.CheckIdentifierResponse_Status" json:"status,omitempty"`
+	Status        CheckIdentifierResponse_Status `protobuf:"varint,1,opt,name=status,proto3,enum=webapi.identity.registration.v1.CheckIdentifierResponse_Status" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CheckIdentifierResponse) Reset() {
 	*x = CheckIdentifierResponse{}
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[1]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -263,7 +263,7 @@ func (x *CheckIdentifierResponse) String() string {
 func (*CheckIdentifierResponse) ProtoMessage() {}
 
 func (x *CheckIdentifierResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[1]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -276,7 +276,7 @@ func (x *CheckIdentifierResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckIdentifierResponse.ProtoReflect.Descriptor instead.
 func (*CheckIdentifierResponse) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_registration_proto_rawDescGZIP(), []int{1}
+	return file_webapi_v1_identity_registration_registration_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *CheckIdentifierResponse) GetStatus() CheckIdentifierResponse_Status {
@@ -302,7 +302,7 @@ type StartPhoneVerificationRequest struct {
 
 func (x *StartPhoneVerificationRequest) Reset() {
 	*x = StartPhoneVerificationRequest{}
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[2]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -314,7 +314,7 @@ func (x *StartPhoneVerificationRequest) String() string {
 func (*StartPhoneVerificationRequest) ProtoMessage() {}
 
 func (x *StartPhoneVerificationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[2]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -327,7 +327,7 @@ func (x *StartPhoneVerificationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartPhoneVerificationRequest.ProtoReflect.Descriptor instead.
 func (*StartPhoneVerificationRequest) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_registration_proto_rawDescGZIP(), []int{2}
+	return file_webapi_v1_identity_registration_registration_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *StartPhoneVerificationRequest) GetPhone() string {
@@ -360,7 +360,7 @@ func (x *StartPhoneVerificationRequest) GetPowNonce() string {
 
 type StartPhoneVerificationResponse struct {
 	state  protoimpl.MessageState                `protogen:"open.v1"`
-	Status StartPhoneVerificationResponse_Status `protobuf:"varint,1,opt,name=status,proto3,enum=webapi.identity.auth.v1.StartPhoneVerificationResponse_Status" json:"status,omitempty"`
+	Status StartPhoneVerificationResponse_Status `protobuf:"varint,1,opt,name=status,proto3,enum=webapi.identity.registration.v1.StartPhoneVerificationResponse_Status" json:"status,omitempty"`
 	// registration_session_id заполнен только при status == STATUS_STARTED.
 	RegistrationSessionId string `protobuf:"bytes,2,opt,name=registration_session_id,json=registrationSessionId,proto3" json:"registration_session_id,omitempty"`
 	unknownFields         protoimpl.UnknownFields
@@ -369,7 +369,7 @@ type StartPhoneVerificationResponse struct {
 
 func (x *StartPhoneVerificationResponse) Reset() {
 	*x = StartPhoneVerificationResponse{}
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[3]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -381,7 +381,7 @@ func (x *StartPhoneVerificationResponse) String() string {
 func (*StartPhoneVerificationResponse) ProtoMessage() {}
 
 func (x *StartPhoneVerificationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[3]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -394,7 +394,7 @@ func (x *StartPhoneVerificationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartPhoneVerificationResponse.ProtoReflect.Descriptor instead.
 func (*StartPhoneVerificationResponse) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_registration_proto_rawDescGZIP(), []int{3}
+	return file_webapi_v1_identity_registration_registration_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *StartPhoneVerificationResponse) GetStatus() StartPhoneVerificationResponse_Status {
@@ -422,7 +422,7 @@ type ConfirmPhoneVerificationRequest struct {
 
 func (x *ConfirmPhoneVerificationRequest) Reset() {
 	*x = ConfirmPhoneVerificationRequest{}
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[4]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -434,7 +434,7 @@ func (x *ConfirmPhoneVerificationRequest) String() string {
 func (*ConfirmPhoneVerificationRequest) ProtoMessage() {}
 
 func (x *ConfirmPhoneVerificationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[4]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -447,7 +447,7 @@ func (x *ConfirmPhoneVerificationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmPhoneVerificationRequest.ProtoReflect.Descriptor instead.
 func (*ConfirmPhoneVerificationRequest) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_registration_proto_rawDescGZIP(), []int{4}
+	return file_webapi_v1_identity_registration_registration_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ConfirmPhoneVerificationRequest) GetRegistrationSessionId() string {
@@ -472,7 +472,7 @@ type ConfirmPhoneVerificationResponse struct {
 
 func (x *ConfirmPhoneVerificationResponse) Reset() {
 	*x = ConfirmPhoneVerificationResponse{}
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[5]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -484,7 +484,7 @@ func (x *ConfirmPhoneVerificationResponse) String() string {
 func (*ConfirmPhoneVerificationResponse) ProtoMessage() {}
 
 func (x *ConfirmPhoneVerificationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[5]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -497,7 +497,7 @@ func (x *ConfirmPhoneVerificationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmPhoneVerificationResponse.ProtoReflect.Descriptor instead.
 func (*ConfirmPhoneVerificationResponse) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_registration_proto_rawDescGZIP(), []int{5}
+	return file_webapi_v1_identity_registration_registration_proto_rawDescGZIP(), []int{5}
 }
 
 type StartEmailVerificationRequest struct {
@@ -514,7 +514,7 @@ type StartEmailVerificationRequest struct {
 
 func (x *StartEmailVerificationRequest) Reset() {
 	*x = StartEmailVerificationRequest{}
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[6]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -526,7 +526,7 @@ func (x *StartEmailVerificationRequest) String() string {
 func (*StartEmailVerificationRequest) ProtoMessage() {}
 
 func (x *StartEmailVerificationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[6]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -539,7 +539,7 @@ func (x *StartEmailVerificationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartEmailVerificationRequest.ProtoReflect.Descriptor instead.
 func (*StartEmailVerificationRequest) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_registration_proto_rawDescGZIP(), []int{6}
+	return file_webapi_v1_identity_registration_registration_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *StartEmailVerificationRequest) GetRegistrationSessionId() string {
@@ -572,14 +572,14 @@ func (x *StartEmailVerificationRequest) GetPowNonce() string {
 
 type StartEmailVerificationResponse struct {
 	state         protoimpl.MessageState                `protogen:"open.v1"`
-	Status        StartEmailVerificationResponse_Status `protobuf:"varint,1,opt,name=status,proto3,enum=webapi.identity.auth.v1.StartEmailVerificationResponse_Status" json:"status,omitempty"`
+	Status        StartEmailVerificationResponse_Status `protobuf:"varint,1,opt,name=status,proto3,enum=webapi.identity.registration.v1.StartEmailVerificationResponse_Status" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *StartEmailVerificationResponse) Reset() {
 	*x = StartEmailVerificationResponse{}
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[7]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -591,7 +591,7 @@ func (x *StartEmailVerificationResponse) String() string {
 func (*StartEmailVerificationResponse) ProtoMessage() {}
 
 func (x *StartEmailVerificationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[7]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -604,7 +604,7 @@ func (x *StartEmailVerificationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartEmailVerificationResponse.ProtoReflect.Descriptor instead.
 func (*StartEmailVerificationResponse) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_registration_proto_rawDescGZIP(), []int{7}
+	return file_webapi_v1_identity_registration_registration_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *StartEmailVerificationResponse) GetStatus() StartEmailVerificationResponse_Status {
@@ -625,7 +625,7 @@ type ConfirmEmailVerificationRequest struct {
 
 func (x *ConfirmEmailVerificationRequest) Reset() {
 	*x = ConfirmEmailVerificationRequest{}
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[8]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -637,7 +637,7 @@ func (x *ConfirmEmailVerificationRequest) String() string {
 func (*ConfirmEmailVerificationRequest) ProtoMessage() {}
 
 func (x *ConfirmEmailVerificationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[8]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -650,7 +650,7 @@ func (x *ConfirmEmailVerificationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmEmailVerificationRequest.ProtoReflect.Descriptor instead.
 func (*ConfirmEmailVerificationRequest) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_registration_proto_rawDescGZIP(), []int{8}
+	return file_webapi_v1_identity_registration_registration_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ConfirmEmailVerificationRequest) GetRegistrationSessionId() string {
@@ -675,7 +675,7 @@ type ConfirmEmailVerificationResponse struct {
 
 func (x *ConfirmEmailVerificationResponse) Reset() {
 	*x = ConfirmEmailVerificationResponse{}
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[9]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -687,7 +687,7 @@ func (x *ConfirmEmailVerificationResponse) String() string {
 func (*ConfirmEmailVerificationResponse) ProtoMessage() {}
 
 func (x *ConfirmEmailVerificationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[9]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -700,7 +700,7 @@ func (x *ConfirmEmailVerificationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmEmailVerificationResponse.ProtoReflect.Descriptor instead.
 func (*ConfirmEmailVerificationResponse) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_registration_proto_rawDescGZIP(), []int{9}
+	return file_webapi_v1_identity_registration_registration_proto_rawDescGZIP(), []int{9}
 }
 
 type CompleteRegistrationRequest struct {
@@ -718,7 +718,7 @@ type CompleteRegistrationRequest struct {
 
 func (x *CompleteRegistrationRequest) Reset() {
 	*x = CompleteRegistrationRequest{}
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[10]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -730,7 +730,7 @@ func (x *CompleteRegistrationRequest) String() string {
 func (*CompleteRegistrationRequest) ProtoMessage() {}
 
 func (x *CompleteRegistrationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[10]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -743,7 +743,7 @@ func (x *CompleteRegistrationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteRegistrationRequest.ProtoReflect.Descriptor instead.
 func (*CompleteRegistrationRequest) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_registration_proto_rawDescGZIP(), []int{10}
+	return file_webapi_v1_identity_registration_registration_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *CompleteRegistrationRequest) GetRegistrationSessionId() string {
@@ -797,7 +797,7 @@ type CompleteRegistrationResponse struct {
 
 func (x *CompleteRegistrationResponse) Reset() {
 	*x = CompleteRegistrationResponse{}
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[11]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -809,7 +809,7 @@ func (x *CompleteRegistrationResponse) String() string {
 func (*CompleteRegistrationResponse) ProtoMessage() {}
 
 func (x *CompleteRegistrationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_registration_proto_msgTypes[11]
+	mi := &file_webapi_v1_identity_registration_registration_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -822,7 +822,7 @@ func (x *CompleteRegistrationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteRegistrationResponse.ProtoReflect.Descriptor instead.
 func (*CompleteRegistrationResponse) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_registration_proto_rawDescGZIP(), []int{11}
+	return file_webapi_v1_identity_registration_registration_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *CompleteRegistrationResponse) GetUserId() string {
@@ -832,19 +832,19 @@ func (x *CompleteRegistrationResponse) GetUserId() string {
 	return ""
 }
 
-var File_webapi_v1_identity_registration_proto protoreflect.FileDescriptor
+var File_webapi_v1_identity_registration_registration_proto protoreflect.FileDescriptor
 
-const file_webapi_v1_identity_registration_proto_rawDesc = "" +
+const file_webapi_v1_identity_registration_registration_proto_rawDesc = "" +
 	"\n" +
-	"%webapi/v1/identity/registration.proto\x12\x17webapi.identity.auth.v1\"z\n" +
+	"2webapi/v1/identity/registration/registration.proto\x12\x1fwebapi.identity.registration.v1\"z\n" +
 	"\x16CheckIdentifierRequest\x12\x1e\n" +
 	"\n" +
 	"identifier\x18\x01 \x01(\tR\n" +
 	"identifier\x12#\n" +
 	"\rpow_challenge\x18\x02 \x01(\tR\fpowChallenge\x12\x1b\n" +
-	"\tpow_nonce\x18\x03 \x01(\tR\bpowNonce\"\xd2\x01\n" +
-	"\x17CheckIdentifierResponse\x12O\n" +
-	"\x06status\x18\x01 \x01(\x0e27.webapi.identity.auth.v1.CheckIdentifierResponse.StatusR\x06status\"f\n" +
+	"\tpow_nonce\x18\x03 \x01(\tR\bpowNonce\"\xda\x01\n" +
+	"\x17CheckIdentifierResponse\x12W\n" +
+	"\x06status\x18\x01 \x01(\x0e2?.webapi.identity.registration.v1.CheckIdentifierResponse.StatusR\x06status\"f\n" +
 	"\x06Status\x12\x16\n" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rSTATUS_EXISTS\x10\x01\x12\x14\n" +
@@ -854,9 +854,9 @@ const file_webapi_v1_identity_registration_proto_rawDesc = "" +
 	"\x05phone\x18\x01 \x01(\tR\x05phone\x122\n" +
 	"\x15personal_data_consent\x18\x02 \x01(\bR\x13personalDataConsent\x12#\n" +
 	"\rpow_challenge\x18\x03 \x01(\tR\fpowChallenge\x12\x1b\n" +
-	"\tpow_nonce\x18\x04 \x01(\tR\bpowNonce\"\x83\x02\n" +
-	"\x1eStartPhoneVerificationResponse\x12V\n" +
-	"\x06status\x18\x01 \x01(\x0e2>.webapi.identity.auth.v1.StartPhoneVerificationResponse.StatusR\x06status\x126\n" +
+	"\tpow_nonce\x18\x04 \x01(\tR\bpowNonce\"\x8b\x02\n" +
+	"\x1eStartPhoneVerificationResponse\x12^\n" +
+	"\x06status\x18\x01 \x01(\x0e2F.webapi.identity.registration.v1.StartPhoneVerificationResponse.StatusR\x06status\x126\n" +
 	"\x17registration_session_id\x18\x02 \x01(\tR\x15registrationSessionId\"Q\n" +
 	"\x06Status\x12\x16\n" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\x12\n" +
@@ -870,9 +870,9 @@ const file_webapi_v1_identity_registration_proto_rawDesc = "" +
 	"\x17registration_session_id\x18\x01 \x01(\tR\x15registrationSessionId\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12#\n" +
 	"\rpow_challenge\x18\x03 \x01(\tR\fpowChallenge\x12\x1b\n" +
-	"\tpow_nonce\x18\x04 \x01(\tR\bpowNonce\"\xcb\x01\n" +
-	"\x1eStartEmailVerificationResponse\x12V\n" +
-	"\x06status\x18\x01 \x01(\x0e2>.webapi.identity.auth.v1.StartEmailVerificationResponse.StatusR\x06status\"Q\n" +
+	"\tpow_nonce\x18\x04 \x01(\tR\bpowNonce\"\xd3\x01\n" +
+	"\x1eStartEmailVerificationResponse\x12^\n" +
+	"\x06status\x18\x01 \x01(\x0e2F.webapi.identity.registration.v1.StartEmailVerificationResponse.StatusR\x06status\"Q\n" +
 	"\x06Status\x12\x16\n" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eSTATUS_STARTED\x10\x01\x12\x1b\n" +
@@ -891,63 +891,63 @@ const file_webapi_v1_identity_registration_proto_rawDesc = "" +
 	"\vmiddle_name\x18\x06 \x01(\tR\n" +
 	"middleName\"7\n" +
 	"\x1cCompleteRegistrationResponse\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId2\xd5\x06\n" +
-	"\x1bIdentityRegistrationService\x12t\n" +
-	"\x0fCheckIdentifier\x12/.webapi.identity.auth.v1.CheckIdentifierRequest\x1a0.webapi.identity.auth.v1.CheckIdentifierResponse\x12\x89\x01\n" +
-	"\x16StartPhoneVerification\x126.webapi.identity.auth.v1.StartPhoneVerificationRequest\x1a7.webapi.identity.auth.v1.StartPhoneVerificationResponse\x12\x8f\x01\n" +
-	"\x18ConfirmPhoneVerification\x128.webapi.identity.auth.v1.ConfirmPhoneVerificationRequest\x1a9.webapi.identity.auth.v1.ConfirmPhoneVerificationResponse\x12\x89\x01\n" +
-	"\x16StartEmailVerification\x126.webapi.identity.auth.v1.StartEmailVerificationRequest\x1a7.webapi.identity.auth.v1.StartEmailVerificationResponse\x12\x8f\x01\n" +
-	"\x18ConfirmEmailVerification\x128.webapi.identity.auth.v1.ConfirmEmailVerificationRequest\x1a9.webapi.identity.auth.v1.ConfirmEmailVerificationResponse\x12\x83\x01\n" +
-	"\x14CompleteRegistration\x124.webapi.identity.auth.v1.CompleteRegistrationRequest\x1a5.webapi.identity.auth.v1.CompleteRegistrationResponseB\xec\x01\n" +
-	"\x1bcom.webapi.identity.auth.v1B\x11RegistrationProtoP\x01Z;dmatech.ru/internal/pkg/contracts/webapi/v1/identity;authv1\xa2\x02\x03WIA\xaa\x02\x17Webapi.Identity.Auth.V1\xca\x02\x17Webapi\\Identity\\Auth\\V1\xe2\x02#Webapi\\Identity\\Auth\\V1\\GPBMetadata\xea\x02\x1aWebapi::Identity::Auth::V1b\x06proto3"
+	"\auser_id\x18\x01 \x01(\tR\x06userId2\xb6\a\n" +
+	"\x1bIdentityRegistrationService\x12\x84\x01\n" +
+	"\x0fCheckIdentifier\x127.webapi.identity.registration.v1.CheckIdentifierRequest\x1a8.webapi.identity.registration.v1.CheckIdentifierResponse\x12\x99\x01\n" +
+	"\x16StartPhoneVerification\x12>.webapi.identity.registration.v1.StartPhoneVerificationRequest\x1a?.webapi.identity.registration.v1.StartPhoneVerificationResponse\x12\x9f\x01\n" +
+	"\x18ConfirmPhoneVerification\x12@.webapi.identity.registration.v1.ConfirmPhoneVerificationRequest\x1aA.webapi.identity.registration.v1.ConfirmPhoneVerificationResponse\x12\x99\x01\n" +
+	"\x16StartEmailVerification\x12>.webapi.identity.registration.v1.StartEmailVerificationRequest\x1a?.webapi.identity.registration.v1.StartEmailVerificationResponse\x12\x9f\x01\n" +
+	"\x18ConfirmEmailVerification\x12@.webapi.identity.registration.v1.ConfirmEmailVerificationRequest\x1aA.webapi.identity.registration.v1.ConfirmEmailVerificationResponse\x12\x93\x01\n" +
+	"\x14CompleteRegistration\x12<.webapi.identity.registration.v1.CompleteRegistrationRequest\x1a=.webapi.identity.registration.v1.CompleteRegistrationResponseB\xa9\x02\n" +
+	"#com.webapi.identity.registration.v1B\x11RegistrationProtoP\x01ZPdmatech.ru/internal/pkg/contracts/webapi/v1/identity/registration;registrationv1\xa2\x02\x03WIR\xaa\x02\x1fWebapi.Identity.Registration.V1\xca\x02\x1fWebapi\\Identity\\Registration\\V1\xe2\x02+Webapi\\Identity\\Registration\\V1\\GPBMetadata\xea\x02\"Webapi::Identity::Registration::V1b\x06proto3"
 
 var (
-	file_webapi_v1_identity_registration_proto_rawDescOnce sync.Once
-	file_webapi_v1_identity_registration_proto_rawDescData []byte
+	file_webapi_v1_identity_registration_registration_proto_rawDescOnce sync.Once
+	file_webapi_v1_identity_registration_registration_proto_rawDescData []byte
 )
 
-func file_webapi_v1_identity_registration_proto_rawDescGZIP() []byte {
-	file_webapi_v1_identity_registration_proto_rawDescOnce.Do(func() {
-		file_webapi_v1_identity_registration_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_webapi_v1_identity_registration_proto_rawDesc), len(file_webapi_v1_identity_registration_proto_rawDesc)))
+func file_webapi_v1_identity_registration_registration_proto_rawDescGZIP() []byte {
+	file_webapi_v1_identity_registration_registration_proto_rawDescOnce.Do(func() {
+		file_webapi_v1_identity_registration_registration_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_webapi_v1_identity_registration_registration_proto_rawDesc), len(file_webapi_v1_identity_registration_registration_proto_rawDesc)))
 	})
-	return file_webapi_v1_identity_registration_proto_rawDescData
+	return file_webapi_v1_identity_registration_registration_proto_rawDescData
 }
 
-var file_webapi_v1_identity_registration_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_webapi_v1_identity_registration_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
-var file_webapi_v1_identity_registration_proto_goTypes = []any{
-	(CheckIdentifierResponse_Status)(0),        // 0: webapi.identity.auth.v1.CheckIdentifierResponse.Status
-	(StartPhoneVerificationResponse_Status)(0), // 1: webapi.identity.auth.v1.StartPhoneVerificationResponse.Status
-	(StartEmailVerificationResponse_Status)(0), // 2: webapi.identity.auth.v1.StartEmailVerificationResponse.Status
-	(*CheckIdentifierRequest)(nil),             // 3: webapi.identity.auth.v1.CheckIdentifierRequest
-	(*CheckIdentifierResponse)(nil),            // 4: webapi.identity.auth.v1.CheckIdentifierResponse
-	(*StartPhoneVerificationRequest)(nil),      // 5: webapi.identity.auth.v1.StartPhoneVerificationRequest
-	(*StartPhoneVerificationResponse)(nil),     // 6: webapi.identity.auth.v1.StartPhoneVerificationResponse
-	(*ConfirmPhoneVerificationRequest)(nil),    // 7: webapi.identity.auth.v1.ConfirmPhoneVerificationRequest
-	(*ConfirmPhoneVerificationResponse)(nil),   // 8: webapi.identity.auth.v1.ConfirmPhoneVerificationResponse
-	(*StartEmailVerificationRequest)(nil),      // 9: webapi.identity.auth.v1.StartEmailVerificationRequest
-	(*StartEmailVerificationResponse)(nil),     // 10: webapi.identity.auth.v1.StartEmailVerificationResponse
-	(*ConfirmEmailVerificationRequest)(nil),    // 11: webapi.identity.auth.v1.ConfirmEmailVerificationRequest
-	(*ConfirmEmailVerificationResponse)(nil),   // 12: webapi.identity.auth.v1.ConfirmEmailVerificationResponse
-	(*CompleteRegistrationRequest)(nil),        // 13: webapi.identity.auth.v1.CompleteRegistrationRequest
-	(*CompleteRegistrationResponse)(nil),       // 14: webapi.identity.auth.v1.CompleteRegistrationResponse
+var file_webapi_v1_identity_registration_registration_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_webapi_v1_identity_registration_registration_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_webapi_v1_identity_registration_registration_proto_goTypes = []any{
+	(CheckIdentifierResponse_Status)(0),        // 0: webapi.identity.registration.v1.CheckIdentifierResponse.Status
+	(StartPhoneVerificationResponse_Status)(0), // 1: webapi.identity.registration.v1.StartPhoneVerificationResponse.Status
+	(StartEmailVerificationResponse_Status)(0), // 2: webapi.identity.registration.v1.StartEmailVerificationResponse.Status
+	(*CheckIdentifierRequest)(nil),             // 3: webapi.identity.registration.v1.CheckIdentifierRequest
+	(*CheckIdentifierResponse)(nil),            // 4: webapi.identity.registration.v1.CheckIdentifierResponse
+	(*StartPhoneVerificationRequest)(nil),      // 5: webapi.identity.registration.v1.StartPhoneVerificationRequest
+	(*StartPhoneVerificationResponse)(nil),     // 6: webapi.identity.registration.v1.StartPhoneVerificationResponse
+	(*ConfirmPhoneVerificationRequest)(nil),    // 7: webapi.identity.registration.v1.ConfirmPhoneVerificationRequest
+	(*ConfirmPhoneVerificationResponse)(nil),   // 8: webapi.identity.registration.v1.ConfirmPhoneVerificationResponse
+	(*StartEmailVerificationRequest)(nil),      // 9: webapi.identity.registration.v1.StartEmailVerificationRequest
+	(*StartEmailVerificationResponse)(nil),     // 10: webapi.identity.registration.v1.StartEmailVerificationResponse
+	(*ConfirmEmailVerificationRequest)(nil),    // 11: webapi.identity.registration.v1.ConfirmEmailVerificationRequest
+	(*ConfirmEmailVerificationResponse)(nil),   // 12: webapi.identity.registration.v1.ConfirmEmailVerificationResponse
+	(*CompleteRegistrationRequest)(nil),        // 13: webapi.identity.registration.v1.CompleteRegistrationRequest
+	(*CompleteRegistrationResponse)(nil),       // 14: webapi.identity.registration.v1.CompleteRegistrationResponse
 }
-var file_webapi_v1_identity_registration_proto_depIdxs = []int32{
-	0,  // 0: webapi.identity.auth.v1.CheckIdentifierResponse.status:type_name -> webapi.identity.auth.v1.CheckIdentifierResponse.Status
-	1,  // 1: webapi.identity.auth.v1.StartPhoneVerificationResponse.status:type_name -> webapi.identity.auth.v1.StartPhoneVerificationResponse.Status
-	2,  // 2: webapi.identity.auth.v1.StartEmailVerificationResponse.status:type_name -> webapi.identity.auth.v1.StartEmailVerificationResponse.Status
-	3,  // 3: webapi.identity.auth.v1.IdentityRegistrationService.CheckIdentifier:input_type -> webapi.identity.auth.v1.CheckIdentifierRequest
-	5,  // 4: webapi.identity.auth.v1.IdentityRegistrationService.StartPhoneVerification:input_type -> webapi.identity.auth.v1.StartPhoneVerificationRequest
-	7,  // 5: webapi.identity.auth.v1.IdentityRegistrationService.ConfirmPhoneVerification:input_type -> webapi.identity.auth.v1.ConfirmPhoneVerificationRequest
-	9,  // 6: webapi.identity.auth.v1.IdentityRegistrationService.StartEmailVerification:input_type -> webapi.identity.auth.v1.StartEmailVerificationRequest
-	11, // 7: webapi.identity.auth.v1.IdentityRegistrationService.ConfirmEmailVerification:input_type -> webapi.identity.auth.v1.ConfirmEmailVerificationRequest
-	13, // 8: webapi.identity.auth.v1.IdentityRegistrationService.CompleteRegistration:input_type -> webapi.identity.auth.v1.CompleteRegistrationRequest
-	4,  // 9: webapi.identity.auth.v1.IdentityRegistrationService.CheckIdentifier:output_type -> webapi.identity.auth.v1.CheckIdentifierResponse
-	6,  // 10: webapi.identity.auth.v1.IdentityRegistrationService.StartPhoneVerification:output_type -> webapi.identity.auth.v1.StartPhoneVerificationResponse
-	8,  // 11: webapi.identity.auth.v1.IdentityRegistrationService.ConfirmPhoneVerification:output_type -> webapi.identity.auth.v1.ConfirmPhoneVerificationResponse
-	10, // 12: webapi.identity.auth.v1.IdentityRegistrationService.StartEmailVerification:output_type -> webapi.identity.auth.v1.StartEmailVerificationResponse
-	12, // 13: webapi.identity.auth.v1.IdentityRegistrationService.ConfirmEmailVerification:output_type -> webapi.identity.auth.v1.ConfirmEmailVerificationResponse
-	14, // 14: webapi.identity.auth.v1.IdentityRegistrationService.CompleteRegistration:output_type -> webapi.identity.auth.v1.CompleteRegistrationResponse
+var file_webapi_v1_identity_registration_registration_proto_depIdxs = []int32{
+	0,  // 0: webapi.identity.registration.v1.CheckIdentifierResponse.status:type_name -> webapi.identity.registration.v1.CheckIdentifierResponse.Status
+	1,  // 1: webapi.identity.registration.v1.StartPhoneVerificationResponse.status:type_name -> webapi.identity.registration.v1.StartPhoneVerificationResponse.Status
+	2,  // 2: webapi.identity.registration.v1.StartEmailVerificationResponse.status:type_name -> webapi.identity.registration.v1.StartEmailVerificationResponse.Status
+	3,  // 3: webapi.identity.registration.v1.IdentityRegistrationService.CheckIdentifier:input_type -> webapi.identity.registration.v1.CheckIdentifierRequest
+	5,  // 4: webapi.identity.registration.v1.IdentityRegistrationService.StartPhoneVerification:input_type -> webapi.identity.registration.v1.StartPhoneVerificationRequest
+	7,  // 5: webapi.identity.registration.v1.IdentityRegistrationService.ConfirmPhoneVerification:input_type -> webapi.identity.registration.v1.ConfirmPhoneVerificationRequest
+	9,  // 6: webapi.identity.registration.v1.IdentityRegistrationService.StartEmailVerification:input_type -> webapi.identity.registration.v1.StartEmailVerificationRequest
+	11, // 7: webapi.identity.registration.v1.IdentityRegistrationService.ConfirmEmailVerification:input_type -> webapi.identity.registration.v1.ConfirmEmailVerificationRequest
+	13, // 8: webapi.identity.registration.v1.IdentityRegistrationService.CompleteRegistration:input_type -> webapi.identity.registration.v1.CompleteRegistrationRequest
+	4,  // 9: webapi.identity.registration.v1.IdentityRegistrationService.CheckIdentifier:output_type -> webapi.identity.registration.v1.CheckIdentifierResponse
+	6,  // 10: webapi.identity.registration.v1.IdentityRegistrationService.StartPhoneVerification:output_type -> webapi.identity.registration.v1.StartPhoneVerificationResponse
+	8,  // 11: webapi.identity.registration.v1.IdentityRegistrationService.ConfirmPhoneVerification:output_type -> webapi.identity.registration.v1.ConfirmPhoneVerificationResponse
+	10, // 12: webapi.identity.registration.v1.IdentityRegistrationService.StartEmailVerification:output_type -> webapi.identity.registration.v1.StartEmailVerificationResponse
+	12, // 13: webapi.identity.registration.v1.IdentityRegistrationService.ConfirmEmailVerification:output_type -> webapi.identity.registration.v1.ConfirmEmailVerificationResponse
+	14, // 14: webapi.identity.registration.v1.IdentityRegistrationService.CompleteRegistration:output_type -> webapi.identity.registration.v1.CompleteRegistrationResponse
 	9,  // [9:15] is the sub-list for method output_type
 	3,  // [3:9] is the sub-list for method input_type
 	3,  // [3:3] is the sub-list for extension type_name
@@ -955,27 +955,27 @@ var file_webapi_v1_identity_registration_proto_depIdxs = []int32{
 	0,  // [0:3] is the sub-list for field type_name
 }
 
-func init() { file_webapi_v1_identity_registration_proto_init() }
-func file_webapi_v1_identity_registration_proto_init() {
-	if File_webapi_v1_identity_registration_proto != nil {
+func init() { file_webapi_v1_identity_registration_registration_proto_init() }
+func file_webapi_v1_identity_registration_registration_proto_init() {
+	if File_webapi_v1_identity_registration_registration_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_webapi_v1_identity_registration_proto_rawDesc), len(file_webapi_v1_identity_registration_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_webapi_v1_identity_registration_registration_proto_rawDesc), len(file_webapi_v1_identity_registration_registration_proto_rawDesc)),
 			NumEnums:      3,
 			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_webapi_v1_identity_registration_proto_goTypes,
-		DependencyIndexes: file_webapi_v1_identity_registration_proto_depIdxs,
-		EnumInfos:         file_webapi_v1_identity_registration_proto_enumTypes,
-		MessageInfos:      file_webapi_v1_identity_registration_proto_msgTypes,
+		GoTypes:           file_webapi_v1_identity_registration_registration_proto_goTypes,
+		DependencyIndexes: file_webapi_v1_identity_registration_registration_proto_depIdxs,
+		EnumInfos:         file_webapi_v1_identity_registration_registration_proto_enumTypes,
+		MessageInfos:      file_webapi_v1_identity_registration_registration_proto_msgTypes,
 	}.Build()
-	File_webapi_v1_identity_registration_proto = out.File
-	file_webapi_v1_identity_registration_proto_goTypes = nil
-	file_webapi_v1_identity_registration_proto_depIdxs = nil
+	File_webapi_v1_identity_registration_registration_proto = out.File
+	file_webapi_v1_identity_registration_registration_proto_goTypes = nil
+	file_webapi_v1_identity_registration_registration_proto_depIdxs = nil
 }

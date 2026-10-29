@@ -10,7 +10,8 @@ import (
 
 	peerhandler "dmatech.ru/internal/modules/notifications/handlers/peer/v1"
 	"dmatech.ru/internal/modules/notifications/sender"
-	deliveryv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/delivery"
+	"dmatech.ru/internal/modules/notifications/template"
+	deliveryv1 "dmatech.ru/internal/pkg/contracts/peer/common/v1/delivery"
 
 	"dmatech.ru/internal/pkg/config"
 	"dmatech.ru/internal/pkg/logger"
@@ -54,8 +55,13 @@ func initialization(ctx context.Context) error {
 		return fmt.Errorf("notifications: %w", err)
 	}
 
+	renderer, err := template.New()
+	if err != nil {
+		return fmt.Errorf("notifications: %w", err)
+	}
+
 	senders := buildSenders(cfg, log)
-	svc := NewService(js, cfg.Env, senders, log)
+	svc := NewService(js, cfg.Env, renderer, senders, log)
 
 	// Нет discovery/webapi-регистрации: у notifications нет webapi-файла
 	// вообще (см. notifications.proto) — гейтвею здесь физически нечего

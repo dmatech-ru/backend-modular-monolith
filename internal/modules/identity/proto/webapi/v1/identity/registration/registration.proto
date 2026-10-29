@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package webapi.identity.auth.v1;
+package webapi.identity.registration.v1;
 
-option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity;authv1";
+option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity/registration;registrationv1";
 
 // IdentityRegistrationService — многошаговая регистрация: телефон с согласием
 // на обработку персональных данных → подтверждение телефона кодом из SMS →

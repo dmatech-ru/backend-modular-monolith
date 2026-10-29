@@ -16,7 +16,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 
-	authv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity"
+	authv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/auth"
 	"dmatech.ru/internal/pkg/natsdiscovery"
 	"dmatech.ru/internal/pkg/natsrpc"
 	"dmatech.ru/internal/pkg/protoset"
@@ -50,7 +50,7 @@ func serveFromIP(s *server, remoteAddr, method, target string, body io.Reader) *
 
 func identityDescriptor(t *testing.T) []byte {
 	t.Helper()
-	descriptor, err := protoset.Build(authv1.File_webapi_v1_identity_auth_proto)
+	descriptor, err := protoset.Build(authv1.File_webapi_v1_identity_auth_auth_proto)
 	if err != nil {
 		t.Fatalf("build descriptor: %v", err)
 	}

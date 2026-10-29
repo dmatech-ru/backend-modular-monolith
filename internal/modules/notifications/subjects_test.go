@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"dmatech.ru/internal/modules/notifications/sender"
-	deliveryv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/delivery"
+	deliveryv1 "dmatech.ru/internal/pkg/contracts/peer/common/v1/delivery"
 )
 
 func discardLogger() *slog.Logger {

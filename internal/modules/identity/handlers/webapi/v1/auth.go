@@ -12,8 +12,8 @@ import (
 
 	"dmatech.ru/internal/modules/identity/repository"
 	common "dmatech.ru/internal/pkg/contracts/webapi/v1/common"
-	identityv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity"
-	"dmatech.ru/internal/pkg/contracts/webapi/v1/identity/authv1connect"
+	authv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/auth"
+	"dmatech.ru/internal/pkg/contracts/webapi/v1/identity/auth/authv1connect"
 	"dmatech.ru/internal/pkg/srp"
 )
 
@@ -60,8 +60,8 @@ func NewHandler(repo Repository, antiEnumKey []byte, opts ...connect.HandlerOpti
 // аккаунте.
 func (h *AuthHandler) InitializeSession(
 	ctx context.Context,
-	req *connect.Request[identityv1.InitializeSessionRequest],
-) (*connect.Response[identityv1.InitializeSessionResponse], error) {
+	req *connect.Request[authv1.InitializeSessionRequest],
+) (*connect.Response[authv1.InitializeSessionResponse], error) {
 	identifier := strings.TrimSpace(req.Msg.GetIdentifier())
 	if identifier == "" {
 		return nil, fieldError(connect.CodeInvalidArgument, "identifier", "identifier must not be empty")
@@ -90,7 +90,7 @@ func (h *AuthHandler) InitializeSession(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	return connect.NewResponse(&identityv1.InitializeSessionResponse{
+	return connect.NewResponse(&authv1.InitializeSessionResponse{
 		SessionId:    sessionID,
 		Salt:         salt,
 		ServerPublic: serverPublic,
@@ -101,8 +101,8 @@ func (h *AuthHandler) InitializeSession(
 // клиента и, если оно верно, отвечает собственным доказательством.
 func (h *AuthHandler) CompleteAuthentication(
 	ctx context.Context,
-	req *connect.Request[identityv1.CompleteAuthenticationRequest],
-) (*connect.Response[identityv1.CompleteAuthenticationResponse], error) {
+	req *connect.Request[authv1.CompleteAuthenticationRequest],
+) (*connect.Response[authv1.CompleteAuthenticationResponse], error) {
 	sessionID := strings.TrimSpace(req.Msg.GetSessionId())
 	if sessionID == "" {
 		return nil, fieldError(connect.CodeInvalidArgument, "session_id", "session_id must not be empty")
@@ -129,7 +129,7 @@ func (h *AuthHandler) CompleteAuthentication(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	return connect.NewResponse(&identityv1.CompleteAuthenticationResponse{ServerProof: serverProof}), nil
+	return connect.NewResponse(&authv1.CompleteAuthenticationResponse{ServerProof: serverProof}), nil
 }
 
 // fieldError формирует connect-ошибку с деталью в виде common.ErrorPayload,

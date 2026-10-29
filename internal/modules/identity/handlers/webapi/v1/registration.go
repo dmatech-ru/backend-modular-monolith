@@ -13,8 +13,8 @@ import (
 	"connectrpc.com/connect"
 
 	"dmatech.ru/internal/modules/identity/repository"
-	identityv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity"
-	"dmatech.ru/internal/pkg/contracts/webapi/v1/identity/authv1connect"
+	registrationv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/registration"
+	"dmatech.ru/internal/pkg/contracts/webapi/v1/identity/registration/registrationv1connect"
 	"dmatech.ru/internal/pkg/srp"
 )
 
@@ -51,9 +51,9 @@ type EmailSender interface {
 	SendCode(ctx context.Context, email, code string) error
 }
 
-// RegistrationHandler реализует authv1connect.IdentityRegistrationServiceHandler.
+// RegistrationHandler реализует registrationv1connect.IdentityRegistrationServiceHandler.
 type RegistrationHandler struct {
-	authv1connect.UnimplementedIdentityRegistrationServiceHandler
+	registrationv1connect.UnimplementedIdentityRegistrationServiceHandler
 
 	repo    RegistrationRepository
 	captcha CaptchaClient
@@ -69,7 +69,7 @@ func NewRegistrationHandler(repo RegistrationRepository, captcha CaptchaClient, 
 // NewRegistrationServiceHandler собирает HTTP-обработчик
 // IdentityRegistrationService для монтирования в веб-сервер.
 func NewRegistrationServiceHandler(repo RegistrationRepository, captcha CaptchaClient, phones PhoneSender, emails EmailSender, opts ...connect.HandlerOption) (string, http.Handler) {
-	return authv1connect.NewIdentityRegistrationServiceHandler(NewRegistrationHandler(repo, captcha, phones, emails), opts...)
+	return registrationv1connect.NewIdentityRegistrationServiceHandler(NewRegistrationHandler(repo, captcha, phones, emails), opts...)
 }
 
 // verifyPoW — true, только если challenge/nonce присланы и проверка у
@@ -86,8 +86,8 @@ func (h *RegistrationHandler) verifyPoW(ctx context.Context, challenge, nonce st
 // сервиса в registration.proto про осознанную утечку и её ограничители.
 func (h *RegistrationHandler) CheckIdentifier(
 	ctx context.Context,
-	req *connect.Request[identityv1.CheckIdentifierRequest],
-) (*connect.Response[identityv1.CheckIdentifierResponse], error) {
+	req *connect.Request[registrationv1.CheckIdentifierRequest],
+) (*connect.Response[registrationv1.CheckIdentifierResponse], error) {
 	identifier := strings.TrimSpace(req.Msg.GetIdentifier())
 	if identifier == "" {
 		return nil, fieldError(connect.CodeInvalidArgument, "identifier", "identifier must not be empty")
@@ -98,22 +98,22 @@ func (h *RegistrationHandler) CheckIdentifier(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	if !ok {
-		return connect.NewResponse(&identityv1.CheckIdentifierResponse{
-			Status: identityv1.CheckIdentifierResponse_STATUS_CAPTCHA_REQUIRED,
+		return connect.NewResponse(&registrationv1.CheckIdentifierResponse{
+			Status: registrationv1.CheckIdentifierResponse_STATUS_CAPTCHA_REQUIRED,
 		}), nil
 	}
 
 	_, err = h.repo.FindAuth(ctx, identifier)
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
-		return connect.NewResponse(&identityv1.CheckIdentifierResponse{
-			Status: identityv1.CheckIdentifierResponse_STATUS_NOT_FOUND,
+		return connect.NewResponse(&registrationv1.CheckIdentifierResponse{
+			Status: registrationv1.CheckIdentifierResponse_STATUS_NOT_FOUND,
 		}), nil
 	case err != nil:
 		return nil, connect.NewError(connect.CodeInternal, err)
 	default:
-		return connect.NewResponse(&identityv1.CheckIdentifierResponse{
-			Status: identityv1.CheckIdentifierResponse_STATUS_EXISTS,
+		return connect.NewResponse(&registrationv1.CheckIdentifierResponse{
+			Status: registrationv1.CheckIdentifierResponse_STATUS_EXISTS,
 		}), nil
 	}
 }
@@ -121,8 +121,8 @@ func (h *RegistrationHandler) CheckIdentifier(
 // StartPhoneVerification — первый шаг регистрации.
 func (h *RegistrationHandler) StartPhoneVerification(
 	ctx context.Context,
-	req *connect.Request[identityv1.StartPhoneVerificationRequest],
-) (*connect.Response[identityv1.StartPhoneVerificationResponse], error) {
+	req *connect.Request[registrationv1.StartPhoneVerificationRequest],
+) (*connect.Response[registrationv1.StartPhoneVerificationResponse], error) {
 	phone := strings.TrimSpace(req.Msg.GetPhone())
 	if phone == "" {
 		return nil, fieldError(connect.CodeInvalidArgument, "phone", "phone must not be empty")
@@ -136,8 +136,8 @@ func (h *RegistrationHandler) StartPhoneVerification(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	if !ok {
-		return connect.NewResponse(&identityv1.StartPhoneVerificationResponse{
-			Status: identityv1.StartPhoneVerificationResponse_STATUS_CAPTCHA_REQUIRED,
+		return connect.NewResponse(&registrationv1.StartPhoneVerificationResponse{
+			Status: registrationv1.StartPhoneVerificationResponse_STATUS_CAPTCHA_REQUIRED,
 		}), nil
 	}
 
@@ -161,8 +161,8 @@ func (h *RegistrationHandler) StartPhoneVerification(
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("send sms: %w", err))
 	}
 
-	return connect.NewResponse(&identityv1.StartPhoneVerificationResponse{
-		Status:                identityv1.StartPhoneVerificationResponse_STATUS_STARTED,
+	return connect.NewResponse(&registrationv1.StartPhoneVerificationResponse{
+		Status:                registrationv1.StartPhoneVerificationResponse_STATUS_STARTED,
 		RegistrationSessionId: sessionID,
 	}), nil
 }
@@ -170,8 +170,8 @@ func (h *RegistrationHandler) StartPhoneVerification(
 // ConfirmPhoneVerification проверяет код из SMS.
 func (h *RegistrationHandler) ConfirmPhoneVerification(
 	ctx context.Context,
-	req *connect.Request[identityv1.ConfirmPhoneVerificationRequest],
-) (*connect.Response[identityv1.ConfirmPhoneVerificationResponse], error) {
+	req *connect.Request[registrationv1.ConfirmPhoneVerificationRequest],
+) (*connect.Response[registrationv1.ConfirmPhoneVerificationResponse], error) {
 	sessionID := strings.TrimSpace(req.Msg.GetRegistrationSessionId())
 	code := strings.TrimSpace(req.Msg.GetCode())
 	if sessionID == "" || code == "" {
@@ -182,14 +182,14 @@ func (h *RegistrationHandler) ConfirmPhoneVerification(
 	if cerr := mapVerifyCodeError(err); cerr != nil {
 		return nil, cerr
 	}
-	return connect.NewResponse(&identityv1.ConfirmPhoneVerificationResponse{}), nil
+	return connect.NewResponse(&registrationv1.ConfirmPhoneVerificationResponse{}), nil
 }
 
 // StartEmailVerification — шаг после подтверждения телефона.
 func (h *RegistrationHandler) StartEmailVerification(
 	ctx context.Context,
-	req *connect.Request[identityv1.StartEmailVerificationRequest],
-) (*connect.Response[identityv1.StartEmailVerificationResponse], error) {
+	req *connect.Request[registrationv1.StartEmailVerificationRequest],
+) (*connect.Response[registrationv1.StartEmailVerificationResponse], error) {
 	sessionID := strings.TrimSpace(req.Msg.GetRegistrationSessionId())
 	email := strings.TrimSpace(req.Msg.GetEmail())
 	if sessionID == "" || email == "" {
@@ -201,8 +201,8 @@ func (h *RegistrationHandler) StartEmailVerification(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	if !ok {
-		return connect.NewResponse(&identityv1.StartEmailVerificationResponse{
-			Status: identityv1.StartEmailVerificationResponse_STATUS_CAPTCHA_REQUIRED,
+		return connect.NewResponse(&registrationv1.StartEmailVerificationResponse{
+			Status: registrationv1.StartEmailVerificationResponse_STATUS_CAPTCHA_REQUIRED,
 		}), nil
 	}
 
@@ -232,16 +232,16 @@ func (h *RegistrationHandler) StartEmailVerification(
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("send email: %w", err))
 	}
 
-	return connect.NewResponse(&identityv1.StartEmailVerificationResponse{
-		Status: identityv1.StartEmailVerificationResponse_STATUS_STARTED,
+	return connect.NewResponse(&registrationv1.StartEmailVerificationResponse{
+		Status: registrationv1.StartEmailVerificationResponse_STATUS_STARTED,
 	}), nil
 }
 
 // ConfirmEmailVerification проверяет код из письма.
 func (h *RegistrationHandler) ConfirmEmailVerification(
 	ctx context.Context,
-	req *connect.Request[identityv1.ConfirmEmailVerificationRequest],
-) (*connect.Response[identityv1.ConfirmEmailVerificationResponse], error) {
+	req *connect.Request[registrationv1.ConfirmEmailVerificationRequest],
+) (*connect.Response[registrationv1.ConfirmEmailVerificationResponse], error) {
 	sessionID := strings.TrimSpace(req.Msg.GetRegistrationSessionId())
 	code := strings.TrimSpace(req.Msg.GetCode())
 	if sessionID == "" || code == "" {
@@ -252,15 +252,15 @@ func (h *RegistrationHandler) ConfirmEmailVerification(
 	if cerr := mapVerifyCodeError(err); cerr != nil {
 		return nil, cerr
 	}
-	return connect.NewResponse(&identityv1.ConfirmEmailVerificationResponse{}), nil
+	return connect.NewResponse(&registrationv1.ConfirmEmailVerificationResponse{}), nil
 }
 
 // CompleteRegistration — финальный шаг: пароль задаётся клиентом локально
 // (как и IdentityAuthService.Register), сервер получает только salt/verifier.
 func (h *RegistrationHandler) CompleteRegistration(
 	ctx context.Context,
-	req *connect.Request[identityv1.CompleteRegistrationRequest],
-) (*connect.Response[identityv1.CompleteRegistrationResponse], error) {
+	req *connect.Request[registrationv1.CompleteRegistrationRequest],
+) (*connect.Response[registrationv1.CompleteRegistrationResponse], error) {
 	sessionID := strings.TrimSpace(req.Msg.GetRegistrationSessionId())
 	if sessionID == "" {
 		return nil, fieldError(connect.CodeInvalidArgument, "registration_session_id", "registration_session_id must not be empty")
@@ -294,7 +294,7 @@ func (h *RegistrationHandler) CompleteRegistration(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	return connect.NewResponse(&identityv1.CompleteRegistrationResponse{UserId: userID}), nil
+	return connect.NewResponse(&registrationv1.CompleteRegistrationResponse{UserId: userID}), nil
 }
 
 // mapVerifyCodeError переводит ошибки repository.VerifyPhoneCode/

@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package peer.common.templates.v1;
+
+option go_package = "dmatech.ru/internal/pkg/proto/peer/common/v1/templates;templatesv1";
+
+// TemplateKey — какой шаблон сообщения использовать (см.
+// internal/modules/notifications/template). Строго peer-зависимость, как и
+// delivery.proto в соседней директории — лежит под peer/, чтобы webapi-
+// контракт не мог случайно заимпортить внутреннюю вокабулярию
+// peer.notifications.v1.NotificationService (см. комментарий там же). webapi
+// на TemplateKey не завязан вообще: вызывающий код (например,
+// identity/handlers/webapi/v1/recovery.go) выбирает нужное значение в Go,
+// обращаясь к этому пакету напрямую как клиент peer-сервиса — это обычный
+// Go-импорт сгенерированного peer-типа для вызова RPC, а не webapi .proto,
+// импортирующий peer .proto.
+//
+// Новый шаблон = новое значение enum здесь + файлы в
+// internal/modules/notifications/template/templates/<имя_в_snake_case>/ —
+// рендерер сам сопоставляет значение enum с именем директории.
+enum TemplateKey {
+  TEMPLATE_KEY_UNSPECIFIED = 0;
+  // TEMPLATE_KEY_OTP_CODE — один шаблон для подтверждения и телефона, и
+  // email: переменная {{.code}}, см. IdentityRegistrationService.
+  TEMPLATE_KEY_OTP_CODE = 1;
+  // TEMPLATE_KEY_PASSWORD_RESET_CODE — код для IdentityRecoveryService.
+  // SendRecoveryCode: переменная {{.code}}, отдельный от
+  // TEMPLATE_KEY_OTP_CODE шаблон — текст явно про восстановление доступа
+  // (в т.ч. предупреждение "если вы не запрашивали это"), а не про
+  // подтверждение контакта при регистрации.
+  TEMPLATE_KEY_PASSWORD_RESET_CODE = 2;
+}

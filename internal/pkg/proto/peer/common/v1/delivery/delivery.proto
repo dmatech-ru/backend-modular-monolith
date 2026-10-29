@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package peer.common.delivery.v1;
+
+option go_package = "dmatech.ru/internal/pkg/proto/peer/common/v1/delivery;deliveryv1";
+
+// DeliveryChannel — канал, по которому peer.notifications.v1.NotificationService
+// может отправить сообщение. Строго peer-зависимость: лежит под peer/, а не
+// рядом/внутри webapi/, намеренно — чтобы разработчик не мог случайно
+// заимпортить этот файл из webapi-контракта и тем самым протащить
+// внутреннюю peer-вокабулярию наружу, в контракт, который видит гейтвей и,
+// транзитивно, браузер. Если webapi-контракту (например,
+// identity/recovery.proto) нужен похожий по смыслу канал — он заводит свой
+// собственный enum и мапит его на этот в Go (на стороне вызывающего, см.
+// identity/handlers/webapi/v1/recovery.go) — не переиспользует этот тип
+// напрямую.
+enum DeliveryChannel {
+  DELIVERY_CHANNEL_UNSPECIFIED = 0;
+  DELIVERY_CHANNEL_EMAIL = 1;
+  DELIVERY_CHANNEL_SMS = 2;
+  // DELIVERY_CHANNEL_TELEGRAM — требует, чтобы аккаунт был заранее привязан
+  // к Telegram (identity.auth.telegram_chat_id, см. миграцию 0006).
+  DELIVERY_CHANNEL_TELEGRAM = 3;
+  // DELIVERY_CHANNEL_MAX — национальный мессенджер MAX (VK). Требует
+  // привязки аккаунта к MAX; соответствующей колонки в схеме пока нет —
+  // добавляется миграцией перед реализацией, не затрагивает этот контракт.
+  DELIVERY_CHANNEL_MAX = 4;
+}

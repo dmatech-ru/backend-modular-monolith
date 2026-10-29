@@ -2,12 +2,11 @@
 // versions:
 // 	protoc-gen-go v1.36.12
 // 	protoc        (unknown)
-// source: webapi/v1/identity/recovery.proto
+// source: webapi/v1/identity/recovery/recovery.proto
 
-package authv1
+package recoveryv1
 
 import (
-	delivery "dmatech.ru/internal/pkg/contracts/webapi/v1/delivery"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -21,6 +20,64 @@ const (
 	// Verify that runtime/protoimpl is sufficiently up-to-date.
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
+
+// DeliveryChannel — см. doc-комментарий сервиса выше про то, почему это
+// отдельный от peer.common.delivery.v1.DeliveryChannel enum, не
+// переиспользование общего.
+type DeliveryChannel int32
+
+const (
+	DeliveryChannel_DELIVERY_CHANNEL_UNSPECIFIED DeliveryChannel = 0
+	DeliveryChannel_DELIVERY_CHANNEL_EMAIL       DeliveryChannel = 1
+	DeliveryChannel_DELIVERY_CHANNEL_SMS         DeliveryChannel = 2
+	DeliveryChannel_DELIVERY_CHANNEL_TELEGRAM    DeliveryChannel = 3
+	DeliveryChannel_DELIVERY_CHANNEL_MAX         DeliveryChannel = 4
+)
+
+// Enum value maps for DeliveryChannel.
+var (
+	DeliveryChannel_name = map[int32]string{
+		0: "DELIVERY_CHANNEL_UNSPECIFIED",
+		1: "DELIVERY_CHANNEL_EMAIL",
+		2: "DELIVERY_CHANNEL_SMS",
+		3: "DELIVERY_CHANNEL_TELEGRAM",
+		4: "DELIVERY_CHANNEL_MAX",
+	}
+	DeliveryChannel_value = map[string]int32{
+		"DELIVERY_CHANNEL_UNSPECIFIED": 0,
+		"DELIVERY_CHANNEL_EMAIL":       1,
+		"DELIVERY_CHANNEL_SMS":         2,
+		"DELIVERY_CHANNEL_TELEGRAM":    3,
+		"DELIVERY_CHANNEL_MAX":         4,
+	}
+)
+
+func (x DeliveryChannel) Enum() *DeliveryChannel {
+	p := new(DeliveryChannel)
+	*p = x
+	return p
+}
+
+func (x DeliveryChannel) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (DeliveryChannel) Descriptor() protoreflect.EnumDescriptor {
+	return file_webapi_v1_identity_recovery_recovery_proto_enumTypes[0].Descriptor()
+}
+
+func (DeliveryChannel) Type() protoreflect.EnumType {
+	return &file_webapi_v1_identity_recovery_recovery_proto_enumTypes[0]
+}
+
+func (x DeliveryChannel) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use DeliveryChannel.Descriptor instead.
+func (DeliveryChannel) EnumDescriptor() ([]byte, []int) {
+	return file_webapi_v1_identity_recovery_recovery_proto_rawDescGZIP(), []int{0}
+}
 
 type InitiateRecoveryResponse_Status int32
 
@@ -58,11 +115,11 @@ func (x InitiateRecoveryResponse_Status) String() string {
 }
 
 func (InitiateRecoveryResponse_Status) Descriptor() protoreflect.EnumDescriptor {
-	return file_webapi_v1_identity_recovery_proto_enumTypes[0].Descriptor()
+	return file_webapi_v1_identity_recovery_recovery_proto_enumTypes[1].Descriptor()
 }
 
 func (InitiateRecoveryResponse_Status) Type() protoreflect.EnumType {
-	return &file_webapi_v1_identity_recovery_proto_enumTypes[0]
+	return &file_webapi_v1_identity_recovery_recovery_proto_enumTypes[1]
 }
 
 func (x InitiateRecoveryResponse_Status) Number() protoreflect.EnumNumber {
@@ -71,7 +128,7 @@ func (x InitiateRecoveryResponse_Status) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use InitiateRecoveryResponse_Status.Descriptor instead.
 func (InitiateRecoveryResponse_Status) EnumDescriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_recovery_proto_rawDescGZIP(), []int{2, 0}
+	return file_webapi_v1_identity_recovery_recovery_proto_rawDescGZIP(), []int{2, 0}
 }
 
 type SendRecoveryCodeResponse_Status int32
@@ -107,11 +164,11 @@ func (x SendRecoveryCodeResponse_Status) String() string {
 }
 
 func (SendRecoveryCodeResponse_Status) Descriptor() protoreflect.EnumDescriptor {
-	return file_webapi_v1_identity_recovery_proto_enumTypes[1].Descriptor()
+	return file_webapi_v1_identity_recovery_recovery_proto_enumTypes[2].Descriptor()
 }
 
 func (SendRecoveryCodeResponse_Status) Type() protoreflect.EnumType {
-	return &file_webapi_v1_identity_recovery_proto_enumTypes[1]
+	return &file_webapi_v1_identity_recovery_recovery_proto_enumTypes[2]
 }
 
 func (x SendRecoveryCodeResponse_Status) Number() protoreflect.EnumNumber {
@@ -120,7 +177,7 @@ func (x SendRecoveryCodeResponse_Status) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SendRecoveryCodeResponse_Status.Descriptor instead.
 func (SendRecoveryCodeResponse_Status) EnumDescriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_recovery_proto_rawDescGZIP(), []int{4, 0}
+	return file_webapi_v1_identity_recovery_recovery_proto_rawDescGZIP(), []int{4, 0}
 }
 
 type InitiateRecoveryRequest struct {
@@ -136,7 +193,7 @@ type InitiateRecoveryRequest struct {
 
 func (x *InitiateRecoveryRequest) Reset() {
 	*x = InitiateRecoveryRequest{}
-	mi := &file_webapi_v1_identity_recovery_proto_msgTypes[0]
+	mi := &file_webapi_v1_identity_recovery_recovery_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -148,7 +205,7 @@ func (x *InitiateRecoveryRequest) String() string {
 func (*InitiateRecoveryRequest) ProtoMessage() {}
 
 func (x *InitiateRecoveryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_recovery_proto_msgTypes[0]
+	mi := &file_webapi_v1_identity_recovery_recovery_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -161,7 +218,7 @@ func (x *InitiateRecoveryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InitiateRecoveryRequest.ProtoReflect.Descriptor instead.
 func (*InitiateRecoveryRequest) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_recovery_proto_rawDescGZIP(), []int{0}
+	return file_webapi_v1_identity_recovery_recovery_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *InitiateRecoveryRequest) GetIdentifier() string {
@@ -186,8 +243,8 @@ func (x *InitiateRecoveryRequest) GetPowNonce() string {
 }
 
 type AvailableMethod struct {
-	state   protoimpl.MessageState   `protogen:"open.v1"`
-	Channel delivery.DeliveryChannel `protobuf:"varint,1,opt,name=channel,proto3,enum=webapi.delivery.v1.DeliveryChannel" json:"channel,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Channel DeliveryChannel        `protobuf:"varint,1,opt,name=channel,proto3,enum=webapi.identity.recovery.v1.DeliveryChannel" json:"channel,omitempty"`
 	// masked_destination — замаскированный адрес/номер (например
 	// "a***@example.com", "+7 *** *** **67") для EMAIL/SMS; пусто для
 	// TELEGRAM/MAX — у них нет сохранённого адреса, доставка идёт в чат,
@@ -199,7 +256,7 @@ type AvailableMethod struct {
 
 func (x *AvailableMethod) Reset() {
 	*x = AvailableMethod{}
-	mi := &file_webapi_v1_identity_recovery_proto_msgTypes[1]
+	mi := &file_webapi_v1_identity_recovery_recovery_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -211,7 +268,7 @@ func (x *AvailableMethod) String() string {
 func (*AvailableMethod) ProtoMessage() {}
 
 func (x *AvailableMethod) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_recovery_proto_msgTypes[1]
+	mi := &file_webapi_v1_identity_recovery_recovery_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -224,14 +281,14 @@ func (x *AvailableMethod) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AvailableMethod.ProtoReflect.Descriptor instead.
 func (*AvailableMethod) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_recovery_proto_rawDescGZIP(), []int{1}
+	return file_webapi_v1_identity_recovery_recovery_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *AvailableMethod) GetChannel() delivery.DeliveryChannel {
+func (x *AvailableMethod) GetChannel() DeliveryChannel {
 	if x != nil {
 		return x.Channel
 	}
-	return delivery.DeliveryChannel(0)
+	return DeliveryChannel_DELIVERY_CHANNEL_UNSPECIFIED
 }
 
 func (x *AvailableMethod) GetMaskedDestination() string {
@@ -243,7 +300,7 @@ func (x *AvailableMethod) GetMaskedDestination() string {
 
 type InitiateRecoveryResponse struct {
 	state  protoimpl.MessageState          `protogen:"open.v1"`
-	Status InitiateRecoveryResponse_Status `protobuf:"varint,1,opt,name=status,proto3,enum=webapi.identity.auth.v1.InitiateRecoveryResponse_Status" json:"status,omitempty"`
+	Status InitiateRecoveryResponse_Status `protobuf:"varint,1,opt,name=status,proto3,enum=webapi.identity.recovery.v1.InitiateRecoveryResponse_Status" json:"status,omitempty"`
 	// recovery_session_id заполнен только при status == STATUS_AVAILABLE.
 	RecoverySessionId string `protobuf:"bytes,2,opt,name=recovery_session_id,json=recoverySessionId,proto3" json:"recovery_session_id,omitempty"`
 	// available_methods заполнен только при status == STATUS_AVAILABLE.
@@ -254,7 +311,7 @@ type InitiateRecoveryResponse struct {
 
 func (x *InitiateRecoveryResponse) Reset() {
 	*x = InitiateRecoveryResponse{}
-	mi := &file_webapi_v1_identity_recovery_proto_msgTypes[2]
+	mi := &file_webapi_v1_identity_recovery_recovery_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -266,7 +323,7 @@ func (x *InitiateRecoveryResponse) String() string {
 func (*InitiateRecoveryResponse) ProtoMessage() {}
 
 func (x *InitiateRecoveryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_recovery_proto_msgTypes[2]
+	mi := &file_webapi_v1_identity_recovery_recovery_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -279,7 +336,7 @@ func (x *InitiateRecoveryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InitiateRecoveryResponse.ProtoReflect.Descriptor instead.
 func (*InitiateRecoveryResponse) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_recovery_proto_rawDescGZIP(), []int{2}
+	return file_webapi_v1_identity_recovery_recovery_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *InitiateRecoveryResponse) GetStatus() InitiateRecoveryResponse_Status {
@@ -304,18 +361,18 @@ func (x *InitiateRecoveryResponse) GetAvailableMethods() []*AvailableMethod {
 }
 
 type SendRecoveryCodeRequest struct {
-	state             protoimpl.MessageState   `protogen:"open.v1"`
-	RecoverySessionId string                   `protobuf:"bytes,1,opt,name=recovery_session_id,json=recoverySessionId,proto3" json:"recovery_session_id,omitempty"`
-	Channel           delivery.DeliveryChannel `protobuf:"varint,2,opt,name=channel,proto3,enum=webapi.delivery.v1.DeliveryChannel" json:"channel,omitempty"`
-	PowChallenge      string                   `protobuf:"bytes,3,opt,name=pow_challenge,json=powChallenge,proto3" json:"pow_challenge,omitempty"`
-	PowNonce          string                   `protobuf:"bytes,4,opt,name=pow_nonce,json=powNonce,proto3" json:"pow_nonce,omitempty"`
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	RecoverySessionId string                 `protobuf:"bytes,1,opt,name=recovery_session_id,json=recoverySessionId,proto3" json:"recovery_session_id,omitempty"`
+	Channel           DeliveryChannel        `protobuf:"varint,2,opt,name=channel,proto3,enum=webapi.identity.recovery.v1.DeliveryChannel" json:"channel,omitempty"`
+	PowChallenge      string                 `protobuf:"bytes,3,opt,name=pow_challenge,json=powChallenge,proto3" json:"pow_challenge,omitempty"`
+	PowNonce          string                 `protobuf:"bytes,4,opt,name=pow_nonce,json=powNonce,proto3" json:"pow_nonce,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
 
 func (x *SendRecoveryCodeRequest) Reset() {
 	*x = SendRecoveryCodeRequest{}
-	mi := &file_webapi_v1_identity_recovery_proto_msgTypes[3]
+	mi := &file_webapi_v1_identity_recovery_recovery_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -327,7 +384,7 @@ func (x *SendRecoveryCodeRequest) String() string {
 func (*SendRecoveryCodeRequest) ProtoMessage() {}
 
 func (x *SendRecoveryCodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_recovery_proto_msgTypes[3]
+	mi := &file_webapi_v1_identity_recovery_recovery_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -340,7 +397,7 @@ func (x *SendRecoveryCodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendRecoveryCodeRequest.ProtoReflect.Descriptor instead.
 func (*SendRecoveryCodeRequest) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_recovery_proto_rawDescGZIP(), []int{3}
+	return file_webapi_v1_identity_recovery_recovery_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *SendRecoveryCodeRequest) GetRecoverySessionId() string {
@@ -350,11 +407,11 @@ func (x *SendRecoveryCodeRequest) GetRecoverySessionId() string {
 	return ""
 }
 
-func (x *SendRecoveryCodeRequest) GetChannel() delivery.DeliveryChannel {
+func (x *SendRecoveryCodeRequest) GetChannel() DeliveryChannel {
 	if x != nil {
 		return x.Channel
 	}
-	return delivery.DeliveryChannel(0)
+	return DeliveryChannel_DELIVERY_CHANNEL_UNSPECIFIED
 }
 
 func (x *SendRecoveryCodeRequest) GetPowChallenge() string {
@@ -373,14 +430,14 @@ func (x *SendRecoveryCodeRequest) GetPowNonce() string {
 
 type SendRecoveryCodeResponse struct {
 	state         protoimpl.MessageState          `protogen:"open.v1"`
-	Status        SendRecoveryCodeResponse_Status `protobuf:"varint,1,opt,name=status,proto3,enum=webapi.identity.auth.v1.SendRecoveryCodeResponse_Status" json:"status,omitempty"`
+	Status        SendRecoveryCodeResponse_Status `protobuf:"varint,1,opt,name=status,proto3,enum=webapi.identity.recovery.v1.SendRecoveryCodeResponse_Status" json:"status,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SendRecoveryCodeResponse) Reset() {
 	*x = SendRecoveryCodeResponse{}
-	mi := &file_webapi_v1_identity_recovery_proto_msgTypes[4]
+	mi := &file_webapi_v1_identity_recovery_recovery_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -392,7 +449,7 @@ func (x *SendRecoveryCodeResponse) String() string {
 func (*SendRecoveryCodeResponse) ProtoMessage() {}
 
 func (x *SendRecoveryCodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_recovery_proto_msgTypes[4]
+	mi := &file_webapi_v1_identity_recovery_recovery_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -405,7 +462,7 @@ func (x *SendRecoveryCodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendRecoveryCodeResponse.ProtoReflect.Descriptor instead.
 func (*SendRecoveryCodeResponse) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_recovery_proto_rawDescGZIP(), []int{4}
+	return file_webapi_v1_identity_recovery_recovery_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *SendRecoveryCodeResponse) GetStatus() SendRecoveryCodeResponse_Status {
@@ -425,7 +482,7 @@ type ConfirmRecoveryCodeRequest struct {
 
 func (x *ConfirmRecoveryCodeRequest) Reset() {
 	*x = ConfirmRecoveryCodeRequest{}
-	mi := &file_webapi_v1_identity_recovery_proto_msgTypes[5]
+	mi := &file_webapi_v1_identity_recovery_recovery_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -437,7 +494,7 @@ func (x *ConfirmRecoveryCodeRequest) String() string {
 func (*ConfirmRecoveryCodeRequest) ProtoMessage() {}
 
 func (x *ConfirmRecoveryCodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_recovery_proto_msgTypes[5]
+	mi := &file_webapi_v1_identity_recovery_recovery_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -450,7 +507,7 @@ func (x *ConfirmRecoveryCodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmRecoveryCodeRequest.ProtoReflect.Descriptor instead.
 func (*ConfirmRecoveryCodeRequest) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_recovery_proto_rawDescGZIP(), []int{5}
+	return file_webapi_v1_identity_recovery_recovery_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ConfirmRecoveryCodeRequest) GetRecoverySessionId() string {
@@ -475,7 +532,7 @@ type ConfirmRecoveryCodeResponse struct {
 
 func (x *ConfirmRecoveryCodeResponse) Reset() {
 	*x = ConfirmRecoveryCodeResponse{}
-	mi := &file_webapi_v1_identity_recovery_proto_msgTypes[6]
+	mi := &file_webapi_v1_identity_recovery_recovery_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -487,7 +544,7 @@ func (x *ConfirmRecoveryCodeResponse) String() string {
 func (*ConfirmRecoveryCodeResponse) ProtoMessage() {}
 
 func (x *ConfirmRecoveryCodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_recovery_proto_msgTypes[6]
+	mi := &file_webapi_v1_identity_recovery_recovery_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -500,7 +557,7 @@ func (x *ConfirmRecoveryCodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmRecoveryCodeResponse.ProtoReflect.Descriptor instead.
 func (*ConfirmRecoveryCodeResponse) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_recovery_proto_rawDescGZIP(), []int{6}
+	return file_webapi_v1_identity_recovery_recovery_proto_rawDescGZIP(), []int{6}
 }
 
 type ResetPasswordRequest struct {
@@ -516,7 +573,7 @@ type ResetPasswordRequest struct {
 
 func (x *ResetPasswordRequest) Reset() {
 	*x = ResetPasswordRequest{}
-	mi := &file_webapi_v1_identity_recovery_proto_msgTypes[7]
+	mi := &file_webapi_v1_identity_recovery_recovery_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -528,7 +585,7 @@ func (x *ResetPasswordRequest) String() string {
 func (*ResetPasswordRequest) ProtoMessage() {}
 
 func (x *ResetPasswordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_recovery_proto_msgTypes[7]
+	mi := &file_webapi_v1_identity_recovery_recovery_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -541,7 +598,7 @@ func (x *ResetPasswordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetPasswordRequest.ProtoReflect.Descriptor instead.
 func (*ResetPasswordRequest) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_recovery_proto_rawDescGZIP(), []int{7}
+	return file_webapi_v1_identity_recovery_recovery_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ResetPasswordRequest) GetRecoverySessionId() string {
@@ -577,7 +634,7 @@ type ResetPasswordResponse struct {
 
 func (x *ResetPasswordResponse) Reset() {
 	*x = ResetPasswordResponse{}
-	mi := &file_webapi_v1_identity_recovery_proto_msgTypes[8]
+	mi := &file_webapi_v1_identity_recovery_recovery_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -589,7 +646,7 @@ func (x *ResetPasswordResponse) String() string {
 func (*ResetPasswordResponse) ProtoMessage() {}
 
 func (x *ResetPasswordResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_webapi_v1_identity_recovery_proto_msgTypes[8]
+	mi := &file_webapi_v1_identity_recovery_recovery_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -602,7 +659,7 @@ func (x *ResetPasswordResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetPasswordResponse.ProtoReflect.Descriptor instead.
 func (*ResetPasswordResponse) Descriptor() ([]byte, []int) {
-	return file_webapi_v1_identity_recovery_proto_rawDescGZIP(), []int{8}
+	return file_webapi_v1_identity_recovery_recovery_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ResetPasswordResponse) GetFrozenUntil() int64 {
@@ -612,36 +669,36 @@ func (x *ResetPasswordResponse) GetFrozenUntil() int64 {
 	return 0
 }
 
-var File_webapi_v1_identity_recovery_proto protoreflect.FileDescriptor
+var File_webapi_v1_identity_recovery_recovery_proto protoreflect.FileDescriptor
 
-const file_webapi_v1_identity_recovery_proto_rawDesc = "" +
+const file_webapi_v1_identity_recovery_recovery_proto_rawDesc = "" +
 	"\n" +
-	"!webapi/v1/identity/recovery.proto\x12\x17webapi.identity.auth.v1\x1a!webapi/v1/delivery/delivery.proto\"{\n" +
+	"*webapi/v1/identity/recovery/recovery.proto\x12\x1bwebapi.identity.recovery.v1\"{\n" +
 	"\x17InitiateRecoveryRequest\x12\x1e\n" +
 	"\n" +
 	"identifier\x18\x01 \x01(\tR\n" +
 	"identifier\x12#\n" +
 	"\rpow_challenge\x18\x02 \x01(\tR\fpowChallenge\x12\x1b\n" +
-	"\tpow_nonce\x18\x03 \x01(\tR\bpowNonce\"\x7f\n" +
-	"\x0fAvailableMethod\x12=\n" +
-	"\achannel\x18\x01 \x01(\x0e2#.webapi.delivery.v1.DeliveryChannelR\achannel\x12-\n" +
-	"\x12masked_destination\x18\x02 \x01(\tR\x11maskedDestination\"\xde\x02\n" +
-	"\x18InitiateRecoveryResponse\x12P\n" +
-	"\x06status\x18\x01 \x01(\x0e28.webapi.identity.auth.v1.InitiateRecoveryResponse.StatusR\x06status\x12.\n" +
-	"\x13recovery_session_id\x18\x02 \x01(\tR\x11recoverySessionId\x12U\n" +
-	"\x11available_methods\x18\x03 \x03(\v2(.webapi.identity.auth.v1.AvailableMethodR\x10availableMethods\"i\n" +
+	"\tpow_nonce\x18\x03 \x01(\tR\bpowNonce\"\x88\x01\n" +
+	"\x0fAvailableMethod\x12F\n" +
+	"\achannel\x18\x01 \x01(\x0e2,.webapi.identity.recovery.v1.DeliveryChannelR\achannel\x12-\n" +
+	"\x12masked_destination\x18\x02 \x01(\tR\x11maskedDestination\"\xe6\x02\n" +
+	"\x18InitiateRecoveryResponse\x12T\n" +
+	"\x06status\x18\x01 \x01(\x0e2<.webapi.identity.recovery.v1.InitiateRecoveryResponse.StatusR\x06status\x12.\n" +
+	"\x13recovery_session_id\x18\x02 \x01(\tR\x11recoverySessionId\x12Y\n" +
+	"\x11available_methods\x18\x03 \x03(\v2,.webapi.identity.recovery.v1.AvailableMethodR\x10availableMethods\"i\n" +
 	"\x06Status\x12\x16\n" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10STATUS_AVAILABLE\x10\x01\x12\x14\n" +
 	"\x10STATUS_NOT_FOUND\x10\x02\x12\x1b\n" +
-	"\x17STATUS_CAPTCHA_REQUIRED\x10\x03\"\xca\x01\n" +
+	"\x17STATUS_CAPTCHA_REQUIRED\x10\x03\"\xd3\x01\n" +
 	"\x17SendRecoveryCodeRequest\x12.\n" +
-	"\x13recovery_session_id\x18\x01 \x01(\tR\x11recoverySessionId\x12=\n" +
-	"\achannel\x18\x02 \x01(\x0e2#.webapi.delivery.v1.DeliveryChannelR\achannel\x12#\n" +
+	"\x13recovery_session_id\x18\x01 \x01(\tR\x11recoverySessionId\x12F\n" +
+	"\achannel\x18\x02 \x01(\x0e2,.webapi.identity.recovery.v1.DeliveryChannelR\achannel\x12#\n" +
 	"\rpow_challenge\x18\x03 \x01(\tR\fpowChallenge\x12\x1b\n" +
-	"\tpow_nonce\x18\x04 \x01(\tR\bpowNonce\"\xbc\x01\n" +
-	"\x18SendRecoveryCodeResponse\x12P\n" +
-	"\x06status\x18\x01 \x01(\x0e28.webapi.identity.auth.v1.SendRecoveryCodeResponse.StatusR\x06status\"N\n" +
+	"\tpow_nonce\x18\x04 \x01(\tR\bpowNonce\"\xc0\x01\n" +
+	"\x18SendRecoveryCodeResponse\x12T\n" +
+	"\x06status\x18\x01 \x01(\x0e2<.webapi.identity.recovery.v1.SendRecoveryCodeResponse.StatusR\x06status\"N\n" +
 	"\x06Status\x12\x16\n" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vSTATUS_SENT\x10\x01\x12\x1b\n" +
@@ -655,56 +712,62 @@ const file_webapi_v1_identity_recovery_proto_rawDesc = "" +
 	"\x04salt\x18\x02 \x01(\fR\x04salt\x12\x1a\n" +
 	"\bverifier\x18\x03 \x01(\fR\bverifier\":\n" +
 	"\x15ResetPasswordResponse\x12!\n" +
-	"\ffrozen_until\x18\x01 \x01(\x03R\vfrozenUntil2\xfe\x03\n" +
-	"\x17IdentityRecoveryService\x12w\n" +
-	"\x10InitiateRecovery\x120.webapi.identity.auth.v1.InitiateRecoveryRequest\x1a1.webapi.identity.auth.v1.InitiateRecoveryResponse\x12w\n" +
-	"\x10SendRecoveryCode\x120.webapi.identity.auth.v1.SendRecoveryCodeRequest\x1a1.webapi.identity.auth.v1.SendRecoveryCodeResponse\x12\x80\x01\n" +
-	"\x13ConfirmRecoveryCode\x123.webapi.identity.auth.v1.ConfirmRecoveryCodeRequest\x1a4.webapi.identity.auth.v1.ConfirmRecoveryCodeResponse\x12n\n" +
-	"\rResetPassword\x12-.webapi.identity.auth.v1.ResetPasswordRequest\x1a..webapi.identity.auth.v1.ResetPasswordResponseB\xe8\x01\n" +
-	"\x1bcom.webapi.identity.auth.v1B\rRecoveryProtoP\x01Z;dmatech.ru/internal/pkg/contracts/webapi/v1/identity;authv1\xa2\x02\x03WIA\xaa\x02\x17Webapi.Identity.Auth.V1\xca\x02\x17Webapi\\Identity\\Auth\\V1\xe2\x02#Webapi\\Identity\\Auth\\V1\\GPBMetadata\xea\x02\x1aWebapi::Identity::Auth::V1b\x06proto3"
+	"\ffrozen_until\x18\x01 \x01(\x03R\vfrozenUntil*\xa2\x01\n" +
+	"\x0fDeliveryChannel\x12 \n" +
+	"\x1cDELIVERY_CHANNEL_UNSPECIFIED\x10\x00\x12\x1a\n" +
+	"\x16DELIVERY_CHANNEL_EMAIL\x10\x01\x12\x18\n" +
+	"\x14DELIVERY_CHANNEL_SMS\x10\x02\x12\x1d\n" +
+	"\x19DELIVERY_CHANNEL_TELEGRAM\x10\x03\x12\x18\n" +
+	"\x14DELIVERY_CHANNEL_MAX\x10\x042\x9e\x04\n" +
+	"\x17IdentityRecoveryService\x12\x7f\n" +
+	"\x10InitiateRecovery\x124.webapi.identity.recovery.v1.InitiateRecoveryRequest\x1a5.webapi.identity.recovery.v1.InitiateRecoveryResponse\x12\x7f\n" +
+	"\x10SendRecoveryCode\x124.webapi.identity.recovery.v1.SendRecoveryCodeRequest\x1a5.webapi.identity.recovery.v1.SendRecoveryCodeResponse\x12\x88\x01\n" +
+	"\x13ConfirmRecoveryCode\x127.webapi.identity.recovery.v1.ConfirmRecoveryCodeRequest\x1a8.webapi.identity.recovery.v1.ConfirmRecoveryCodeResponse\x12v\n" +
+	"\rResetPassword\x121.webapi.identity.recovery.v1.ResetPasswordRequest\x1a2.webapi.identity.recovery.v1.ResetPasswordResponseB\x89\x02\n" +
+	"\x1fcom.webapi.identity.recovery.v1B\rRecoveryProtoP\x01ZHdmatech.ru/internal/pkg/contracts/webapi/v1/identity/recovery;recoveryv1\xa2\x02\x03WIR\xaa\x02\x1bWebapi.Identity.Recovery.V1\xca\x02\x1bWebapi\\Identity\\Recovery\\V1\xe2\x02'Webapi\\Identity\\Recovery\\V1\\GPBMetadata\xea\x02\x1eWebapi::Identity::Recovery::V1b\x06proto3"
 
 var (
-	file_webapi_v1_identity_recovery_proto_rawDescOnce sync.Once
-	file_webapi_v1_identity_recovery_proto_rawDescData []byte
+	file_webapi_v1_identity_recovery_recovery_proto_rawDescOnce sync.Once
+	file_webapi_v1_identity_recovery_recovery_proto_rawDescData []byte
 )
 
-func file_webapi_v1_identity_recovery_proto_rawDescGZIP() []byte {
-	file_webapi_v1_identity_recovery_proto_rawDescOnce.Do(func() {
-		file_webapi_v1_identity_recovery_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_webapi_v1_identity_recovery_proto_rawDesc), len(file_webapi_v1_identity_recovery_proto_rawDesc)))
+func file_webapi_v1_identity_recovery_recovery_proto_rawDescGZIP() []byte {
+	file_webapi_v1_identity_recovery_recovery_proto_rawDescOnce.Do(func() {
+		file_webapi_v1_identity_recovery_recovery_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_webapi_v1_identity_recovery_recovery_proto_rawDesc), len(file_webapi_v1_identity_recovery_recovery_proto_rawDesc)))
 	})
-	return file_webapi_v1_identity_recovery_proto_rawDescData
+	return file_webapi_v1_identity_recovery_recovery_proto_rawDescData
 }
 
-var file_webapi_v1_identity_recovery_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_webapi_v1_identity_recovery_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
-var file_webapi_v1_identity_recovery_proto_goTypes = []any{
-	(InitiateRecoveryResponse_Status)(0), // 0: webapi.identity.auth.v1.InitiateRecoveryResponse.Status
-	(SendRecoveryCodeResponse_Status)(0), // 1: webapi.identity.auth.v1.SendRecoveryCodeResponse.Status
-	(*InitiateRecoveryRequest)(nil),      // 2: webapi.identity.auth.v1.InitiateRecoveryRequest
-	(*AvailableMethod)(nil),              // 3: webapi.identity.auth.v1.AvailableMethod
-	(*InitiateRecoveryResponse)(nil),     // 4: webapi.identity.auth.v1.InitiateRecoveryResponse
-	(*SendRecoveryCodeRequest)(nil),      // 5: webapi.identity.auth.v1.SendRecoveryCodeRequest
-	(*SendRecoveryCodeResponse)(nil),     // 6: webapi.identity.auth.v1.SendRecoveryCodeResponse
-	(*ConfirmRecoveryCodeRequest)(nil),   // 7: webapi.identity.auth.v1.ConfirmRecoveryCodeRequest
-	(*ConfirmRecoveryCodeResponse)(nil),  // 8: webapi.identity.auth.v1.ConfirmRecoveryCodeResponse
-	(*ResetPasswordRequest)(nil),         // 9: webapi.identity.auth.v1.ResetPasswordRequest
-	(*ResetPasswordResponse)(nil),        // 10: webapi.identity.auth.v1.ResetPasswordResponse
-	(delivery.DeliveryChannel)(0),        // 11: webapi.delivery.v1.DeliveryChannel
+var file_webapi_v1_identity_recovery_recovery_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_webapi_v1_identity_recovery_recovery_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_webapi_v1_identity_recovery_recovery_proto_goTypes = []any{
+	(DeliveryChannel)(0),                 // 0: webapi.identity.recovery.v1.DeliveryChannel
+	(InitiateRecoveryResponse_Status)(0), // 1: webapi.identity.recovery.v1.InitiateRecoveryResponse.Status
+	(SendRecoveryCodeResponse_Status)(0), // 2: webapi.identity.recovery.v1.SendRecoveryCodeResponse.Status
+	(*InitiateRecoveryRequest)(nil),      // 3: webapi.identity.recovery.v1.InitiateRecoveryRequest
+	(*AvailableMethod)(nil),              // 4: webapi.identity.recovery.v1.AvailableMethod
+	(*InitiateRecoveryResponse)(nil),     // 5: webapi.identity.recovery.v1.InitiateRecoveryResponse
+	(*SendRecoveryCodeRequest)(nil),      // 6: webapi.identity.recovery.v1.SendRecoveryCodeRequest
+	(*SendRecoveryCodeResponse)(nil),     // 7: webapi.identity.recovery.v1.SendRecoveryCodeResponse
+	(*ConfirmRecoveryCodeRequest)(nil),   // 8: webapi.identity.recovery.v1.ConfirmRecoveryCodeRequest
+	(*ConfirmRecoveryCodeResponse)(nil),  // 9: webapi.identity.recovery.v1.ConfirmRecoveryCodeResponse
+	(*ResetPasswordRequest)(nil),         // 10: webapi.identity.recovery.v1.ResetPasswordRequest
+	(*ResetPasswordResponse)(nil),        // 11: webapi.identity.recovery.v1.ResetPasswordResponse
 }
-var file_webapi_v1_identity_recovery_proto_depIdxs = []int32{
-	11, // 0: webapi.identity.auth.v1.AvailableMethod.channel:type_name -> webapi.delivery.v1.DeliveryChannel
-	0,  // 1: webapi.identity.auth.v1.InitiateRecoveryResponse.status:type_name -> webapi.identity.auth.v1.InitiateRecoveryResponse.Status
-	3,  // 2: webapi.identity.auth.v1.InitiateRecoveryResponse.available_methods:type_name -> webapi.identity.auth.v1.AvailableMethod
-	11, // 3: webapi.identity.auth.v1.SendRecoveryCodeRequest.channel:type_name -> webapi.delivery.v1.DeliveryChannel
-	1,  // 4: webapi.identity.auth.v1.SendRecoveryCodeResponse.status:type_name -> webapi.identity.auth.v1.SendRecoveryCodeResponse.Status
-	2,  // 5: webapi.identity.auth.v1.IdentityRecoveryService.InitiateRecovery:input_type -> webapi.identity.auth.v1.InitiateRecoveryRequest
-	5,  // 6: webapi.identity.auth.v1.IdentityRecoveryService.SendRecoveryCode:input_type -> webapi.identity.auth.v1.SendRecoveryCodeRequest
-	7,  // 7: webapi.identity.auth.v1.IdentityRecoveryService.ConfirmRecoveryCode:input_type -> webapi.identity.auth.v1.ConfirmRecoveryCodeRequest
-	9,  // 8: webapi.identity.auth.v1.IdentityRecoveryService.ResetPassword:input_type -> webapi.identity.auth.v1.ResetPasswordRequest
-	4,  // 9: webapi.identity.auth.v1.IdentityRecoveryService.InitiateRecovery:output_type -> webapi.identity.auth.v1.InitiateRecoveryResponse
-	6,  // 10: webapi.identity.auth.v1.IdentityRecoveryService.SendRecoveryCode:output_type -> webapi.identity.auth.v1.SendRecoveryCodeResponse
-	8,  // 11: webapi.identity.auth.v1.IdentityRecoveryService.ConfirmRecoveryCode:output_type -> webapi.identity.auth.v1.ConfirmRecoveryCodeResponse
-	10, // 12: webapi.identity.auth.v1.IdentityRecoveryService.ResetPassword:output_type -> webapi.identity.auth.v1.ResetPasswordResponse
+var file_webapi_v1_identity_recovery_recovery_proto_depIdxs = []int32{
+	0,  // 0: webapi.identity.recovery.v1.AvailableMethod.channel:type_name -> webapi.identity.recovery.v1.DeliveryChannel
+	1,  // 1: webapi.identity.recovery.v1.InitiateRecoveryResponse.status:type_name -> webapi.identity.recovery.v1.InitiateRecoveryResponse.Status
+	4,  // 2: webapi.identity.recovery.v1.InitiateRecoveryResponse.available_methods:type_name -> webapi.identity.recovery.v1.AvailableMethod
+	0,  // 3: webapi.identity.recovery.v1.SendRecoveryCodeRequest.channel:type_name -> webapi.identity.recovery.v1.DeliveryChannel
+	2,  // 4: webapi.identity.recovery.v1.SendRecoveryCodeResponse.status:type_name -> webapi.identity.recovery.v1.SendRecoveryCodeResponse.Status
+	3,  // 5: webapi.identity.recovery.v1.IdentityRecoveryService.InitiateRecovery:input_type -> webapi.identity.recovery.v1.InitiateRecoveryRequest
+	6,  // 6: webapi.identity.recovery.v1.IdentityRecoveryService.SendRecoveryCode:input_type -> webapi.identity.recovery.v1.SendRecoveryCodeRequest
+	8,  // 7: webapi.identity.recovery.v1.IdentityRecoveryService.ConfirmRecoveryCode:input_type -> webapi.identity.recovery.v1.ConfirmRecoveryCodeRequest
+	10, // 8: webapi.identity.recovery.v1.IdentityRecoveryService.ResetPassword:input_type -> webapi.identity.recovery.v1.ResetPasswordRequest
+	5,  // 9: webapi.identity.recovery.v1.IdentityRecoveryService.InitiateRecovery:output_type -> webapi.identity.recovery.v1.InitiateRecoveryResponse
+	7,  // 10: webapi.identity.recovery.v1.IdentityRecoveryService.SendRecoveryCode:output_type -> webapi.identity.recovery.v1.SendRecoveryCodeResponse
+	9,  // 11: webapi.identity.recovery.v1.IdentityRecoveryService.ConfirmRecoveryCode:output_type -> webapi.identity.recovery.v1.ConfirmRecoveryCodeResponse
+	11, // 12: webapi.identity.recovery.v1.IdentityRecoveryService.ResetPassword:output_type -> webapi.identity.recovery.v1.ResetPasswordResponse
 	9,  // [9:13] is the sub-list for method output_type
 	5,  // [5:9] is the sub-list for method input_type
 	5,  // [5:5] is the sub-list for extension type_name
@@ -712,27 +775,27 @@ var file_webapi_v1_identity_recovery_proto_depIdxs = []int32{
 	0,  // [0:5] is the sub-list for field type_name
 }
 
-func init() { file_webapi_v1_identity_recovery_proto_init() }
-func file_webapi_v1_identity_recovery_proto_init() {
-	if File_webapi_v1_identity_recovery_proto != nil {
+func init() { file_webapi_v1_identity_recovery_recovery_proto_init() }
+func file_webapi_v1_identity_recovery_recovery_proto_init() {
+	if File_webapi_v1_identity_recovery_recovery_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_webapi_v1_identity_recovery_proto_rawDesc), len(file_webapi_v1_identity_recovery_proto_rawDesc)),
-			NumEnums:      2,
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_webapi_v1_identity_recovery_recovery_proto_rawDesc), len(file_webapi_v1_identity_recovery_recovery_proto_rawDesc)),
+			NumEnums:      3,
 			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_webapi_v1_identity_recovery_proto_goTypes,
-		DependencyIndexes: file_webapi_v1_identity_recovery_proto_depIdxs,
-		EnumInfos:         file_webapi_v1_identity_recovery_proto_enumTypes,
-		MessageInfos:      file_webapi_v1_identity_recovery_proto_msgTypes,
+		GoTypes:           file_webapi_v1_identity_recovery_recovery_proto_goTypes,
+		DependencyIndexes: file_webapi_v1_identity_recovery_recovery_proto_depIdxs,
+		EnumInfos:         file_webapi_v1_identity_recovery_recovery_proto_enumTypes,
+		MessageInfos:      file_webapi_v1_identity_recovery_recovery_proto_msgTypes,
 	}.Build()
-	File_webapi_v1_identity_recovery_proto = out.File
-	file_webapi_v1_identity_recovery_proto_goTypes = nil
-	file_webapi_v1_identity_recovery_proto_depIdxs = nil
+	File_webapi_v1_identity_recovery_recovery_proto = out.File
+	file_webapi_v1_identity_recovery_recovery_proto_goTypes = nil
+	file_webapi_v1_identity_recovery_recovery_proto_depIdxs = nil
 }

@@ -11,7 +11,7 @@ import (
 	"connectrpc.com/connect"
 
 	"dmatech.ru/internal/modules/identity/repository"
-	identityv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity"
+	authv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/auth"
 	"dmatech.ru/internal/pkg/srp"
 )
 
@@ -107,7 +107,7 @@ func connectCode(t *testing.T, err error) connect.Code {
 func TestInitializeSession_UnknownIdentifierSucceeds(t *testing.T) {
 	h := newTestHandler()
 
-	resp, err := h.InitializeSession(context.Background(), connect.NewRequest(&identityv1.InitializeSessionRequest{
+	resp, err := h.InitializeSession(context.Background(), connect.NewRequest(&authv1.InitializeSessionRequest{
 		Identifier: "unknown@example.com",
 	}))
 	if err != nil {
@@ -121,7 +121,7 @@ func TestInitializeSession_UnknownIdentifierSucceeds(t *testing.T) {
 func TestInitializeSession_UnknownIdentifierSaltIsStable(t *testing.T) {
 	h := newTestHandler()
 	ctx := context.Background()
-	req := connect.NewRequest(&identityv1.InitializeSessionRequest{Identifier: "unknown@example.com"})
+	req := connect.NewRequest(&authv1.InitializeSessionRequest{Identifier: "unknown@example.com"})
 
 	resp1, err := h.InitializeSession(ctx, req)
 	if err != nil {
@@ -142,7 +142,7 @@ func TestInitializeSession_UnknownIdentifierLooksTheSameAcrossReplicas(t *testin
 	// должны отвечать одинаково для одного и того же неизвестного identifier.
 	h1 := NewAuthHandler(newFakeRepository(), testAntiEnumKey)
 	h2 := NewAuthHandler(newFakeRepository(), testAntiEnumKey)
-	req := connect.NewRequest(&identityv1.InitializeSessionRequest{Identifier: "unknown@example.com"})
+	req := connect.NewRequest(&authv1.InitializeSessionRequest{Identifier: "unknown@example.com"})
 
 	resp1, err := h1.InitializeSession(context.Background(), req)
 	if err != nil {
@@ -169,7 +169,7 @@ func TestAuthFlow_UnknownIdentifierAlwaysFailsLikeWrongPassword(t *testing.T) {
 func TestInitializeSession_EmptyIdentifier(t *testing.T) {
 	h := newTestHandler()
 
-	_, err := h.InitializeSession(context.Background(), connect.NewRequest(&identityv1.InitializeSessionRequest{
+	_, err := h.InitializeSession(context.Background(), connect.NewRequest(&authv1.InitializeSessionRequest{
 		Identifier: "   ",
 	}))
 	if code := connectCode(t, err); code != connect.CodeInvalidArgument {
@@ -180,11 +180,11 @@ func TestInitializeSession_EmptyIdentifier(t *testing.T) {
 // loginAs эмулирует настоящего SRP-клиента (независимо от сервера) для
 // identifier/password, уже зарегистрированных в h, и возвращает финальный
 // ответ CompleteAuthentication.
-func loginAs(t *testing.T, h *AuthHandler, identifier, password string) (*connect.Response[identityv1.CompleteAuthenticationResponse], error) {
+func loginAs(t *testing.T, h *AuthHandler, identifier, password string) (*connect.Response[authv1.CompleteAuthenticationResponse], error) {
 	t.Helper()
 	ctx := context.Background()
 
-	initResp, err := h.InitializeSession(ctx, connect.NewRequest(&identityv1.InitializeSessionRequest{Identifier: identifier}))
+	initResp, err := h.InitializeSession(ctx, connect.NewRequest(&authv1.InitializeSessionRequest{Identifier: identifier}))
 	if err != nil {
 		t.Fatalf("initialize session: %v", err)
 	}
@@ -199,7 +199,7 @@ func loginAs(t *testing.T, h *AuthHandler, identifier, password string) (*connec
 		t.Fatalf("ComputeClientProof: %v", err)
 	}
 
-	resp, err := h.CompleteAuthentication(ctx, connect.NewRequest(&identityv1.CompleteAuthenticationRequest{
+	resp, err := h.CompleteAuthentication(ctx, connect.NewRequest(&authv1.CompleteAuthenticationRequest{
 		SessionId:    initResp.Msg.GetSessionId(),
 		ClientPublic: clientPublic,
 		ClientProof:  clientProof,
@@ -251,7 +251,7 @@ func TestCompleteAuthentication_SessionIsSingleUse(t *testing.T) {
 	repo.seedUser(identifier, password)
 
 	ctx := context.Background()
-	initResp, err := h.InitializeSession(ctx, connect.NewRequest(&identityv1.InitializeSessionRequest{Identifier: identifier}))
+	initResp, err := h.InitializeSession(ctx, connect.NewRequest(&authv1.InitializeSessionRequest{Identifier: identifier}))
 	if err != nil {
 		t.Fatalf("initialize session: %v", err)
 	}
@@ -264,7 +264,7 @@ func TestCompleteAuthentication_SessionIsSingleUse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ComputeClientProof: %v", err)
 	}
-	req := connect.NewRequest(&identityv1.CompleteAuthenticationRequest{
+	req := connect.NewRequest(&authv1.CompleteAuthenticationRequest{
 		SessionId: initResp.Msg.GetSessionId(), ClientPublic: clientPublic, ClientProof: clientProof,
 	})
 
@@ -280,7 +280,7 @@ func TestCompleteAuthentication_SessionIsSingleUse(t *testing.T) {
 func TestCompleteAuthentication_MissingFields(t *testing.T) {
 	h := newTestHandler()
 
-	_, err := h.CompleteAuthentication(context.Background(), connect.NewRequest(&identityv1.CompleteAuthenticationRequest{
+	_, err := h.CompleteAuthentication(context.Background(), connect.NewRequest(&authv1.CompleteAuthenticationRequest{
 		SessionId: "   ",
 	}))
 	if code := connectCode(t, err); code != connect.CodeInvalidArgument {

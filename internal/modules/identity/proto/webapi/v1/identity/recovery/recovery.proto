@@ -1,18 +1,26 @@
 syntax = "proto3";
 
-package webapi.identity.auth.v1;
+package webapi.identity.recovery.v1;
 
-option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity;authv1";
-
-import "webapi/v1/delivery/delivery.proto";
+option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity/recovery;recoveryv1";
 
 // IdentityRecoveryService — восстановление доступа: идентификатор →
 // доступные способы получить код → выбор способа и отправка кода →
 // подтверждение кода → сброс пароля.
 //
-// Каналы (webapi.delivery.v1.DeliveryChannel) — не "привязанные к аккаунту
-// заранее" сущности, а общие транспорты, через которые сервис умеет
-// отправлять данные:
+// DeliveryChannel здесь — свой, webapi-локальный enum, а не
+// peer.common.delivery.v1.DeliveryChannel из internal/pkg/proto (тот —
+// зависимость конкретно peer-слоя: notifications и всё, что зовёт
+// NotificationService напрямую по NATS, см. doc-комментарий там). webapi не
+// импортирует файлы из-под peer/ ни при каких обстоятельствах — это и есть
+// граница, которая не должна протекать: протекла бы, если бы этот enum
+// переиспользовал peer-овский напрямую. Соответствие между этими двумя
+// enum'ами (значения совпадают по смыслу: EMAIL/SMS/TELEGRAM/MAX) держит
+// явная функция-маппер в Go (см. identity/handlers/webapi/v1/recovery.go),
+// не общий тип.
+//
+// Каналы — не "привязанные к аккаунту заранее" сущности, а общие транспорты,
+// через которые сервис умеет отправлять данные:
 //   - EMAIL/SMS доступны, если у аккаунта есть email/телефон (identity.auth) —
 //     туда и уходит код напрямую.
 //   - TELEGRAM/MAX не требуют никакой предварительной привязки/сохранённого
@@ -84,6 +92,17 @@ service IdentityRecoveryService {
   rpc ResetPassword (ResetPasswordRequest) returns (ResetPasswordResponse);
 }
 
+// DeliveryChannel — см. doc-комментарий сервиса выше про то, почему это
+// отдельный от peer.common.delivery.v1.DeliveryChannel enum, не
+// переиспользование общего.
+enum DeliveryChannel {
+  DELIVERY_CHANNEL_UNSPECIFIED = 0;
+  DELIVERY_CHANNEL_EMAIL = 1;
+  DELIVERY_CHANNEL_SMS = 2;
+  DELIVERY_CHANNEL_TELEGRAM = 3;
+  DELIVERY_CHANNEL_MAX = 4;
+}
+
 message InitiateRecoveryRequest {
   string identifier = 1;
   // pow_challenge/pow_nonce — см. комментарий сервиса; пусты в первой
@@ -93,7 +112,7 @@ message InitiateRecoveryRequest {
 }
 
 message AvailableMethod {
-  webapi.delivery.v1.DeliveryChannel channel = 1;
+  DeliveryChannel channel = 1;
   // masked_destination — замаскированный адрес/номер (например
   // "a***@example.com", "+7 *** *** **67") для EMAIL/SMS; пусто для
   // TELEGRAM/MAX — у них нет сохранённого адреса, доставка идёт в чат,
@@ -117,7 +136,7 @@ message InitiateRecoveryResponse {
 
 message SendRecoveryCodeRequest {
   string recovery_session_id = 1;
-  webapi.delivery.v1.DeliveryChannel channel = 2;
+  DeliveryChannel channel = 2;
   string pow_challenge = 3;
   string pow_nonce = 4;
 }

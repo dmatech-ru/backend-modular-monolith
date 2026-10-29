@@ -1,5 +1,5 @@
 // Package sender — отправители сообщений, один тип на канал доставки
-// (webapi.delivery.v1.DeliveryChannel): разный провайдер, разный протокол,
+// (peer.common.delivery.v1.DeliveryChannel): разный провайдер, разный протокол,
 // разные сбои, общий только интерфейс Sender.
 package sender
 

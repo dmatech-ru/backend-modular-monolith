@@ -7,11 +7,11 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 
 	errorsv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/common"
-	authv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity"
+	authv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/auth"
 )
 
 func TestBuild_SingleFileWithoutImports(t *testing.T) {
-	data, err := Build(authv1.File_webapi_v1_identity_auth_proto)
+	data, err := Build(authv1.File_webapi_v1_identity_auth_auth_proto)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -20,7 +20,7 @@ func TestBuild_SingleFileWithoutImports(t *testing.T) {
 	if err := proto.Unmarshal(data, &set); err != nil {
 		t.Fatalf("failed to unmarshal descriptor set: %v", err)
 	}
-	if len(set.File) != 1 || set.File[0].GetName() != "webapi/v1/identity/auth.proto" {
+	if len(set.File) != 1 || set.File[0].GetName() != "webapi/v1/identity/auth/auth.proto" {
 		t.Fatalf("unexpected file set: %+v", set.File)
 	}
 }

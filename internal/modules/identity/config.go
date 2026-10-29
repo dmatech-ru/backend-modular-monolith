@@ -20,6 +20,18 @@ type configuration struct {
 	// зависимость, не через discovery (см. captcha_client.go).
 	CaptchaServiceName    string `yaml:"captchaServiceName" env:"IDENTITY_CAPTCHA_SERVICE_NAME" env-default:"captcha-service"`
 	CaptchaServiceVersion string `yaml:"captchaServiceVersion" env:"IDENTITY_CAPTCHA_SERVICE_VERSION" env-default:"0.0.0"`
+
+	// NotificationsServiceName/NotificationsServiceVersion — то же самое
+	// для peer.notifications.v1.NotificationService (см. notifications_client.go).
+	NotificationsServiceName    string `yaml:"notificationsServiceName" env:"IDENTITY_NOTIFICATIONS_SERVICE_NAME" env-default:"notifications-service"`
+	NotificationsServiceVersion string `yaml:"notificationsServiceVersion" env:"IDENTITY_NOTIFICATIONS_SERVICE_VERSION" env-default:"0.0.0"`
+
+	// PasswordResetFreezeHours — см. ResetPasswordResponse.frozen_until в
+	// recovery.proto: сколько часов после смены пароля через восстановление
+	// доступа окно считается "заморозкой" (сегодня это только зафиксированный
+	// факт в ответе, enforcement нигде не реализован — см. README
+	// "Известные ограничения").
+	PasswordResetFreezeHours int `yaml:"passwordResetFreezeHours" env:"IDENTITY_PASSWORD_RESET_FREEZE_HOURS" env-default:"24"`
 }
 
 // seedsConfig — настройки SQL-сидов схемы identity, применяются только
