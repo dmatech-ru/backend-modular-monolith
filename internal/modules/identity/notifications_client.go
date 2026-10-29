@@ -94,3 +94,32 @@ func (s *recoveryCodeSender) SendCode(ctx context.Context, channel deliveryv1.De
 }
 
 var _ authhandler.RecoveryCodeSender = (*recoveryCodeSender)(nil)
+
+// securityAlertSender реализует authhandler.PasswordChangedNotifier через
+// peer.notifications.v1.NotificationService.Send с template_key =
+// TEMPLATE_KEY_PASSWORD_CHANGED — без variables, в отличие от
+// otpPhoneSender/recoveryCodeSender: текст статический (см.
+// internal/modules/notifications/template/templates/password_changed).
+type securityAlertSender struct {
+	client notificationsv1connect.NotificationServiceClient
+}
+
+func (s *securityAlertSender) NotifyEmail(ctx context.Context, email string) error {
+	_, err := s.client.Send(ctx, connect.NewRequest(&notificationspeerv1.SendRequest{
+		Channel:     deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_EMAIL,
+		Destination: email,
+		TemplateKey: templatesv1.TemplateKey_TEMPLATE_KEY_PASSWORD_CHANGED,
+	}))
+	return err
+}
+
+func (s *securityAlertSender) NotifyPhone(ctx context.Context, phone string) error {
+	_, err := s.client.Send(ctx, connect.NewRequest(&notificationspeerv1.SendRequest{
+		Channel:     deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_SMS,
+		Destination: phone,
+		TemplateKey: templatesv1.TemplateKey_TEMPLATE_KEY_PASSWORD_CHANGED,
+	}))
+	return err
+}
+
+var _ authhandler.PasswordChangedNotifier = (*securityAlertSender)(nil)

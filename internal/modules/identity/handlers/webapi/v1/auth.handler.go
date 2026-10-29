@@ -35,7 +35,7 @@ func Subscribe(
 	validator validation.Validator,
 	repo Repository, antiEnumKey []byte,
 	regRepo RegistrationRepository, captcha CaptchaClient, phones PhoneSender, emails EmailSender,
-	recoveryRepo RecoveryRepository, recoveryCodes RecoveryCodeSender, passwordResetFreeze time.Duration,
+	recoveryRepo RecoveryRepository, recoveryCodes RecoveryCodeSender, passwordChangedAlerts PasswordChangedNotifier, passwordResetFreeze time.Duration,
 	sessions Sessions,
 ) (*natsrpc.RPCSubscription, error) {
 	opts := connect.WithInterceptors(validation.Interceptor(validator), locale.ServerInterceptor(), authctx.ServerInterceptor())
@@ -48,7 +48,7 @@ func Subscribe(
 	registrationPath, registrationHandler := NewRegistrationServiceHandler(regRepo, captcha, phones, emails, sessions, opts)
 	mux.Handle(registrationPath, registrationHandler)
 
-	recoveryPath, recoveryHandler := NewRecoveryServiceHandler(recoveryRepo, captcha, recoveryCodes, sessions, passwordResetFreeze, opts)
+	recoveryPath, recoveryHandler := NewRecoveryServiceHandler(recoveryRepo, captcha, recoveryCodes, sessions, passwordChangedAlerts, log, passwordResetFreeze, opts)
 	mux.Handle(recoveryPath, recoveryHandler)
 
 	sessionPath, sessionHandler := NewSessionServiceHandler(sessions, opts)

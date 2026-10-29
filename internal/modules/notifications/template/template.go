@@ -211,6 +211,8 @@ func templateKeyToken(key templatesv1.TemplateKey) (string, error) {
 		return "otp_code", nil
 	case templatesv1.TemplateKey_TEMPLATE_KEY_PASSWORD_RESET_CODE:
 		return "password_reset_code", nil
+	case templatesv1.TemplateKey_TEMPLATE_KEY_PASSWORD_CHANGED:
+		return "password_changed", nil
 	default:
 		return "", fmt.Errorf("%w: template_key %v", ErrTemplateNotFound, key)
 	}

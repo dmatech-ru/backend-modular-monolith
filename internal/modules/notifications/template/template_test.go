@@ -115,6 +115,39 @@ func TestRender_PasswordResetCode_Email_ReturnsSubjectAndBody(t *testing.T) {
 	}
 }
 
+func TestRender_PasswordChanged_NoVariables(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	subject, body, err := r.Render(
+		templatesv1.TemplateKey_TEMPLATE_KEY_PASSWORD_CHANGED,
+		deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_EMAIL,
+		locale.Default,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("Render (email): %v", err)
+	}
+	if subject == "" || body == "" {
+		t.Fatalf("subject/body = %q/%q, want both non-empty for the email channel", subject, body)
+	}
+
+	_, body, err = r.Render(
+		templatesv1.TemplateKey_TEMPLATE_KEY_PASSWORD_CHANGED,
+		deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_SMS,
+		locale.Default,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("Render (sms): %v", err)
+	}
+	if body == "" {
+		t.Fatal("expected a non-empty body for the sms channel")
+	}
+}
+
 // email.body.tmpl — только блок content; оформление (doctype, <html lang>)
 // приходит из общей email_layout.tmpl (см. doc-комментарий template.go) —
 // проверяем, что рендер и правда идёт через неё, а не просто совпадает по

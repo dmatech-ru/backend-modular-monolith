@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -27,7 +28,7 @@ type RecoveryRepository interface {
 	GetRecoverySession(ctx context.Context, sessionID string) (repository.RecoverySessionRecord, error)
 	SetRecoveryCode(ctx context.Context, sessionID string, codeHash []byte) error
 	VerifyRecoveryCode(ctx context.Context, sessionID string, codeHash []byte) error
-	ResetRecoveryPassword(ctx context.Context, sessionID string, salt, verifier []byte) (userID string, passwordChangedAt time.Time, err error)
+	ResetRecoveryPassword(ctx context.Context, sessionID string, salt, verifier []byte) (acc repository.RecoveryAccount, passwordChangedAt time.Time, err error)
 }
 
 // RecoveryCodeSender отправляет код восстановления по выбранному каналу.
@@ -51,6 +52,21 @@ type SessionRevoker interface {
 	RevokeAllSessions(ctx context.Context, userID string) error
 }
 
+// PasswordChangedNotifier сообщает владельцу аккаунта, что пароль был
+// изменён — отдельно на каждый известный контактный канал (email и/или
+// телефон через SMS), не только на тот, что использовался для самого
+// восстановления: если ResetPassword вызвал злоумышленник, захватив ровно
+// один из каналов, у легитимного владельца должен быть шанс узнать об этом
+// по другому (см. doc-комментарий ResetPassword). Единственная реализация —
+// тонкая обёртка над peer.notifications.v1.NotificationService.Send с
+// template_key = TEMPLATE_KEY_PASSWORD_CHANGED (см. notifications_client.go).
+// Best-effort: ошибка отправки не блокирует уже совершённый сброс пароля
+// (см. notifyPasswordChanged), только логируется.
+type PasswordChangedNotifier interface {
+	NotifyEmail(ctx context.Context, email string) error
+	NotifyPhone(ctx context.Context, phone string) error
+}
+
 // RecoveryHandler реализует recoveryv1connect.IdentityRecoveryServiceHandler.
 type RecoveryHandler struct {
 	recoveryv1connect.UnimplementedIdentityRecoveryServiceHandler
@@ -59,6 +75,8 @@ type RecoveryHandler struct {
 	captcha  CaptchaClient
 	codes    RecoveryCodeSender
 	sessions SessionRevoker
+	alerts   PasswordChangedNotifier
+	log      *slog.Logger
 	// passwordResetFreeze — см. ResetPasswordResponse.frozen_until в
 	// recovery.proto: период после смены пароля, задуманный как окно, в
 	// течение которого чувствительные операции должны быть недоступны
@@ -67,14 +85,14 @@ type RecoveryHandler struct {
 }
 
 // NewRecoveryHandler создаёт обработчик IdentityRecoveryService.
-func NewRecoveryHandler(repo RecoveryRepository, captcha CaptchaClient, codes RecoveryCodeSender, sessions SessionRevoker, passwordResetFreeze time.Duration) *RecoveryHandler {
-	return &RecoveryHandler{repo: repo, captcha: captcha, codes: codes, sessions: sessions, passwordResetFreeze: passwordResetFreeze}
+func NewRecoveryHandler(repo RecoveryRepository, captcha CaptchaClient, codes RecoveryCodeSender, sessions SessionRevoker, alerts PasswordChangedNotifier, log *slog.Logger, passwordResetFreeze time.Duration) *RecoveryHandler {
+	return &RecoveryHandler{repo: repo, captcha: captcha, codes: codes, sessions: sessions, alerts: alerts, log: log, passwordResetFreeze: passwordResetFreeze}
 }
 
 // NewRecoveryServiceHandler собирает HTTP-обработчик IdentityRecoveryService
 // для монтирования в веб-сервер.
-func NewRecoveryServiceHandler(repo RecoveryRepository, captcha CaptchaClient, codes RecoveryCodeSender, sessions SessionRevoker, passwordResetFreeze time.Duration, opts ...connect.HandlerOption) (string, http.Handler) {
-	return recoveryv1connect.NewIdentityRecoveryServiceHandler(NewRecoveryHandler(repo, captcha, codes, sessions, passwordResetFreeze), opts...)
+func NewRecoveryServiceHandler(repo RecoveryRepository, captcha CaptchaClient, codes RecoveryCodeSender, sessions SessionRevoker, alerts PasswordChangedNotifier, log *slog.Logger, passwordResetFreeze time.Duration, opts ...connect.HandlerOption) (string, http.Handler) {
+	return recoveryv1connect.NewIdentityRecoveryServiceHandler(NewRecoveryHandler(repo, captcha, codes, sessions, alerts, log, passwordResetFreeze), opts...)
 }
 
 // verifyPoW — см. комментарий у RegistrationHandler.verifyPoW; тот же приём,
@@ -341,7 +359,7 @@ func (h *RecoveryHandler) ResetPassword(
 		return nil, fieldError(connect.CodeInvalidArgument, "verifier", "identity.verifier.invalid", "verifier is missing or malformed")
 	}
 
-	userID, changedAt, err := h.repo.ResetRecoveryPassword(ctx, sessionID, salt, verifier)
+	acc, changedAt, err := h.repo.ResetRecoveryPassword(ctx, sessionID, salt, verifier)
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
 		return nil, keyedError(connect.CodeNotFound, "identity.recovery_session.not_found", "recovery session not found or expired")
@@ -354,11 +372,31 @@ func (h *RecoveryHandler) ResetPassword(
 	// Гасит все сессии пользователя (см. doc-комментарий ResetPassword в
 	// recovery.proto) — после сброса пароля ни один ранее выданный
 	// refresh-токен не должен продолжать работать.
-	if err := h.sessions.RevokeAllSessions(ctx, userID); err != nil {
+	if err := h.sessions.RevokeAllSessions(ctx, acc.UserID); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
+
+	h.notifyPasswordChanged(ctx, acc)
 
 	return connect.NewResponse(&recoveryv1.ResetPasswordResponse{
 		FrozenUntil: changedAt.Add(h.passwordResetFreeze).Unix(),
 	}), nil
+}
+
+// notifyPasswordChanged уведомляет владельца аккаунта на все известные
+// контактные каналы (см. doc-комментарий PasswordChangedNotifier) —
+// best-effort: сброс пароля уже совершён и сессии уже погашены, отказ
+// самого уведомления не должен превращаться в ошибку ответа клиенту,
+// только попадает в лог.
+func (h *RecoveryHandler) notifyPasswordChanged(ctx context.Context, acc repository.RecoveryAccount) {
+	if acc.Email != nil && *acc.Email != "" {
+		if err := h.alerts.NotifyEmail(ctx, *acc.Email); err != nil {
+			h.log.ErrorContext(ctx, "не удалось отправить уведомление о смене пароля (email)", "error", err)
+		}
+	}
+	if acc.Phone != nil && *acc.Phone != "" {
+		if err := h.alerts.NotifyPhone(ctx, *acc.Phone); err != nil {
+			h.log.ErrorContext(ctx, "не удалось отправить уведомление о смене пароля (sms)", "error", err)
+		}
+	}
 }

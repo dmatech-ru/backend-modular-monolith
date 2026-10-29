@@ -122,12 +122,13 @@ func initialization(ctx context.Context) error {
 	phones := &otpPhoneSender{client: notifications}
 	emails := &otpEmailSender{client: notifications}
 	recoveryCodes := &recoveryCodeSender{client: notifications}
+	passwordChangedAlerts := &securityAlertSender{client: notifications}
 	passwordResetFreeze := time.Duration(cfg.PasswordResetFreezeHours) * time.Hour
 	sessions := newSessionManager(repo, tokenIssuer)
 
 	sub, err := authhandler.Subscribe(nc, log, cfg.Env, cfg.ServiceName, cfg.AppVersion, validator,
 		repo, antiEnumKey, repo, captcha, phones, emails,
-		repo, recoveryCodes, passwordResetFreeze, sessions)
+		repo, recoveryCodes, passwordChangedAlerts, passwordResetFreeze, sessions)
 	if err != nil {
 		return fmt.Errorf("failed to subscribe identity services: %w", err)
 	}

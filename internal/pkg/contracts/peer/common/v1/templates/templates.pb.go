@@ -48,6 +48,15 @@ const (
 	// (в т.ч. предупреждение "если вы не запрашивали это"), а не про
 	// подтверждение контакта при регистрации.
 	TemplateKey_TEMPLATE_KEY_PASSWORD_RESET_CODE TemplateKey = 2
+	// TEMPLATE_KEY_PASSWORD_CHANGED — уведомление о факте смены пароля,
+	// IdentityRecoveryService.ResetPassword: без переменных, текст
+	// статический ("если это не вы..."). Отправляется на все известные
+	// контакты аккаунта (email и/или телефон через SMS), не только на тот
+	// канал, который использовался для восстановления — если ResetPassword
+	// вызвал злоумышленник, захватив ровно один канал, у владельца должен
+	// быть шанс узнать об этом по другому (см. doc-комментарий ResetPassword
+	// в recovery.proto).
+	TemplateKey_TEMPLATE_KEY_PASSWORD_CHANGED TemplateKey = 3
 )
 
 // Enum value maps for TemplateKey.
@@ -56,11 +65,13 @@ var (
 		0: "TEMPLATE_KEY_UNSPECIFIED",
 		1: "TEMPLATE_KEY_OTP_CODE",
 		2: "TEMPLATE_KEY_PASSWORD_RESET_CODE",
+		3: "TEMPLATE_KEY_PASSWORD_CHANGED",
 	}
 	TemplateKey_value = map[string]int32{
 		"TEMPLATE_KEY_UNSPECIFIED":         0,
 		"TEMPLATE_KEY_OTP_CODE":            1,
 		"TEMPLATE_KEY_PASSWORD_RESET_CODE": 2,
+		"TEMPLATE_KEY_PASSWORD_CHANGED":    3,
 	}
 )
 
@@ -95,11 +106,12 @@ var File_peer_common_v1_templates_templates_proto protoreflect.FileDescriptor
 
 const file_peer_common_v1_templates_templates_proto_rawDesc = "" +
 	"\n" +
-	"(peer/common/v1/templates/templates.proto\x12\x18peer.common.templates.v1*l\n" +
+	"(peer/common/v1/templates/templates.proto\x12\x18peer.common.templates.v1*\x8f\x01\n" +
 	"\vTemplateKey\x12\x1c\n" +
 	"\x18TEMPLATE_KEY_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15TEMPLATE_KEY_OTP_CODE\x10\x01\x12$\n" +
-	" TEMPLATE_KEY_PASSWORD_RESET_CODE\x10\x02B\xf9\x01\n" +
+	" TEMPLATE_KEY_PASSWORD_RESET_CODE\x10\x02\x12!\n" +
+	"\x1dTEMPLATE_KEY_PASSWORD_CHANGED\x10\x03B\xf9\x01\n" +
 	"\x1ccom.peer.common.templates.v1B\x0eTemplatesProtoP\x01ZFdmatech.ru/internal/pkg/contracts/peer/common/v1/templates;templatesv1\xa2\x02\x03PCT\xaa\x02\x18Peer.Common.Templates.V1\xca\x02\x18Peer\\Common\\Templates\\V1\xe2\x02$Peer\\Common\\Templates\\V1\\GPBMetadata\xea\x02\x1bPeer::Common::Templates::V1b\x06proto3"
 
 var (

@@ -177,45 +177,49 @@ func (r *Repository) VerifyRecoveryCode(ctx context.Context, sessionID string, c
 // сессии (иначе ErrRecoveryCodeNotVerified), перезаписывает SRP salt/verifier
 // и password_changed_at у аккаунта и одной транзакцией удаляет сессию —
 // повторный вызов с тем же sessionID вернёт ErrNotFound (как и
-// CompleteRegistration с registration_sessions).
-func (r *Repository) ResetRecoveryPassword(ctx context.Context, sessionID string, salt, verifier []byte) (userID string, passwordChangedAt time.Time, err error) {
+// CompleteRegistration с registration_sessions). Возвращает email/phone из
+// того же снимка сессии (RecoveryAccount), а не только user_id — хендлеру
+// они нужны, чтобы уведомить владельца о смене пароля на все известные
+// каналы (см. PasswordChangedNotifier), не только на тот, что использовался
+// для самого восстановления.
+func (r *Repository) ResetRecoveryPassword(ctx context.Context, sessionID string, salt, verifier []byte) (acc RecoveryAccount, passwordChangedAt time.Time, err error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
-		return "", time.Time{}, fmt.Errorf("reset recovery password: %w", err)
+		return RecoveryAccount{}, time.Time{}, fmt.Errorf("reset recovery password: %w", err)
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
 	var codeVerified bool
 	if err := tx.QueryRow(ctx,
-		`SELECT user_id::text, code_verified
+		`SELECT user_id::text, email, phone, code_verified
 		 FROM identity.recovery_sessions WHERE id = $1::uuid AND expires_at > now()`,
 		sessionID,
-	).Scan(&userID, &codeVerified); err != nil {
+	).Scan(&acc.UserID, &acc.Email, &acc.Phone, &codeVerified); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || isInvalidUUID(err) {
-			return "", time.Time{}, ErrNotFound
+			return RecoveryAccount{}, time.Time{}, ErrNotFound
 		}
-		return "", time.Time{}, fmt.Errorf("reset recovery password: load session: %w", err)
+		return RecoveryAccount{}, time.Time{}, fmt.Errorf("reset recovery password: load session: %w", err)
 	}
 	if !codeVerified {
-		return "", time.Time{}, ErrRecoveryCodeNotVerified
+		return RecoveryAccount{}, time.Time{}, ErrRecoveryCodeNotVerified
 	}
 
 	now := time.Now()
 	if _, err := tx.Exec(ctx,
 		`UPDATE identity.auth SET srp_salt = $2, srp_verifier = $3, password_changed_at = $4 WHERE user_id = $1::uuid`,
-		userID, salt, verifier, now,
+		acc.UserID, salt, verifier, now,
 	); err != nil {
-		return "", time.Time{}, fmt.Errorf("reset recovery password: update auth: %w", err)
+		return RecoveryAccount{}, time.Time{}, fmt.Errorf("reset recovery password: update auth: %w", err)
 	}
 
 	if _, err := tx.Exec(ctx,
 		`DELETE FROM identity.recovery_sessions WHERE id = $1::uuid`, sessionID,
 	); err != nil {
-		return "", time.Time{}, fmt.Errorf("reset recovery password: delete session: %w", err)
+		return RecoveryAccount{}, time.Time{}, fmt.Errorf("reset recovery password: delete session: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return "", time.Time{}, fmt.Errorf("reset recovery password: %w", err)
+		return RecoveryAccount{}, time.Time{}, fmt.Errorf("reset recovery password: %w", err)
 	}
-	return userID, now, nil
+	return acc, now, nil
 }
