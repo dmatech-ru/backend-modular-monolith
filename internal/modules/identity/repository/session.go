@@ -34,9 +34,22 @@ func RefreshTokenTTL() time.Duration { return sessionRefreshTTL }
 // CompleteRegistration): refreshTokenHash — хеш (SHA-256) сгенерированного
 // refresh-токена, сам токен в базу не попадает, как и везде в этом модуле
 // с чувствительными секретами.
+//
+// Попутно (в том же запросе) удаляются просроченные строки — тот же приём,
+// что CreateChallenge/CreateRecoverySession/CreateRegistrationSession:
+// отдельная фоновая задача (reaper) не нужна, каждый новый вход сам чистит
+// накопившийся мусор. Условие — именно expires_at, не revoked_at: погашенная
+// более ранней ротацией строка (см. RotateSession) должна дожить до
+// собственного expires_at, иначе повторное предъявление угнанного
+// refresh-токена после того, как её успели удалить, вернёт "сессия не
+// найдена" вместо ErrSessionReused — то есть молча потеряло бы сигнал
+// компрометации, который и есть весь смысл хранить погашенные строки.
 func (r *Repository) CreateSession(ctx context.Context, userID string, refreshTokenHash []byte, userAgent string) (sessionID string, err error) {
 	err = r.pool.QueryRow(ctx,
-		`INSERT INTO identity.sessions (user_id, refresh_token_hash, user_agent, expires_at)
+		`WITH cleanup AS (
+		     DELETE FROM identity.sessions WHERE expires_at <= now()
+		 )
+		 INSERT INTO identity.sessions (user_id, refresh_token_hash, user_agent, expires_at)
 		 VALUES ($1::uuid, $2, $3, $4)
 		 RETURNING id::text`,
 		userID, refreshTokenHash, userAgent, time.Now().Add(sessionRefreshTTL),
@@ -102,8 +115,15 @@ func (r *Repository) RotateSession(ctx context.Context, oldRefreshTokenHash, new
 		return "", "", fmt.Errorf("rotate session: revoke old: %w", err)
 	}
 
+	// Попутная чистка просроченных строк — тот же приём, что в CreateSession
+	// (см. doc-комментарий там): Refresh происходит гораздо чаще нового
+	// входа (раз в sessionAccessTTL на активного пользователя), так что это
+	// основной момент, когда мусор реально выметается.
 	if err := tx.QueryRow(ctx,
-		`INSERT INTO identity.sessions (user_id, refresh_token_hash, user_agent, expires_at)
+		`WITH cleanup AS (
+		     DELETE FROM identity.sessions WHERE expires_at <= now()
+		 )
+		 INSERT INTO identity.sessions (user_id, refresh_token_hash, user_agent, expires_at)
 		 VALUES ($1::uuid, $2, $3, $4)
 		 RETURNING id::text`,
 		userID, newRefreshTokenHash, userAgent, time.Now().Add(sessionRefreshTTL),
