@@ -44,11 +44,21 @@ const challengeTTL = 2 * time.Minute
 // Repository — репозиторий identity-модуля поверх пула соединений PostgreSQL.
 type Repository struct {
 	pool *pgxpool.Pool
+	// maxCodeAttempts — лимит попыток ввода кода подтверждения (телефон/
+	// email при регистрации, код восстановления при сбросе пароля), после
+	// которого VerifyPhoneCode/VerifyEmailCode/VerifyRecoveryCode отвечают
+	// ErrTooManyAttempts. Конфигурируется (см. configuration.MaxCodeAttempts
+	// в identity/config.go), а не захардкожен, в отличие от самого факта,
+	// что это один и тот же счётчик для обоих каналов регистрации и для
+	// восстановления — такое разделение (разные колонки/таблицы под одно и
+	// то же число) не стоило выражать тремя разными конфигами.
+	maxCodeAttempts int
 }
 
-// New оборачивает pool в Repository.
-func New(pool *pgxpool.Pool) *Repository {
-	return &Repository{pool: pool}
+// New оборачивает pool в Repository. maxCodeAttempts — см. doc-комментарий
+// поля Repository.maxCodeAttempts.
+func New(pool *pgxpool.Pool, maxCodeAttempts int) *Repository {
+	return &Repository{pool: pool, maxCodeAttempts: maxCodeAttempts}
 }
 
 // AuthRecord — данные identity.auth, нужные для начала SRP-входа.

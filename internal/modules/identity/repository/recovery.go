@@ -22,9 +22,6 @@ const (
 	recoverySessionTTL = 30 * time.Minute
 	// recoveryCodeTTL — срок жизни кода восстановления.
 	recoveryCodeTTL = 10 * time.Minute
-	// maxRecoveryCodeAttempts — лимит попыток ввода кода, после которого
-	// VerifyRecoveryCode отвечает ErrTooManyAttempts.
-	maxRecoveryCodeAttempts = 5
 )
 
 // RecoveryAccount — email/телефон аккаунта, нужные IdentityRecoveryService:
@@ -150,7 +147,7 @@ func (r *Repository) VerifyRecoveryCode(ctx context.Context, sessionID string, c
 		return fmt.Errorf("verify recovery code: %w", err)
 	}
 
-	if attempts >= maxRecoveryCodeAttempts {
+	if attempts >= r.maxCodeAttempts {
 		return ErrTooManyAttempts
 	}
 

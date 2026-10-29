@@ -116,7 +116,7 @@ func initialization(ctx context.Context) error {
 	}
 	service.OnShutdown(reg.Close)
 
-	repo := identityrepo.New(pool)
+	repo := identityrepo.New(pool, cfg.MaxCodeAttempts)
 	captcha := newCaptchaClient(nc, cfg.Env, cfg.CaptchaServiceName, cfg.CaptchaServiceVersion)
 	notifications := newNotificationsClient(nc, cfg.Env, cfg.NotificationsServiceName, cfg.NotificationsServiceVersion)
 	phones := &otpPhoneSender{client: notifications}

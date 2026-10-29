@@ -27,9 +27,6 @@ const (
 	registrationSessionTTL = 30 * time.Minute
 	// verificationCodeTTL — срок жизни кода подтверждения телефона/email.
 	verificationCodeTTL = 10 * time.Minute
-	// maxCodeAttempts — лимит попыток ввода кода на один шаг, после которого
-	// ConfirmPhoneVerification/ConfirmEmailVerification отвечают ErrTooManyAttempts.
-	maxCodeAttempts = 5
 )
 
 // CreatePhoneSession создаёт новую сессию регистрации с кодом подтверждения
@@ -91,7 +88,7 @@ func (r *Repository) verifyCode(ctx context.Context, sessionID string, codeHash 
 		return fmt.Errorf("verify code: %w", err)
 	}
 
-	if attempts >= maxCodeAttempts {
+	if attempts >= r.maxCodeAttempts {
 		return ErrTooManyAttempts
 	}
 

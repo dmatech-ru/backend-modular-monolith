@@ -52,6 +52,14 @@ type configuration struct {
 	// doc-комментарий сервиса в registration.proto.
 	PowAdaptiveThreshold int           `yaml:"powAdaptiveThreshold" env:"IDENTITY_POW_ADAPTIVE_THRESHOLD" env-default:"3"`
 	PowAdaptiveWindow    time.Duration `yaml:"powAdaptiveWindow" env:"IDENTITY_POW_ADAPTIVE_WINDOW" env-default:"1h"`
+
+	// MaxCodeAttempts — лимит попыток ввода кода подтверждения: телефон/
+	// email при регистрации (ConfirmPhoneVerification/ConfirmEmailVerification)
+	// и код восстановления при сбросе пароля (ConfirmRecoveryCode) — один и
+	// тот же счётчик по смыслу ("сколько раз можно ошибиться, вводя
+	// присланный код"), хоть и в разных таблицах (см. repository.Repository.
+	// maxCodeAttempts). После превышения — ErrTooManyAttempts/RESOURCE_EXHAUSTED.
+	MaxCodeAttempts int `yaml:"maxCodeAttempts" env:"IDENTITY_MAX_CODE_ATTEMPTS" env-default:"3"`
 }
 
 // seedsConfig — настройки SQL-сидов схемы identity, применяются только
