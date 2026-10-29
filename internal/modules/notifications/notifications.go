@@ -8,12 +8,15 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
+	"connectrpc.com/connect"
+
 	peerhandler "dmatech.ru/internal/modules/notifications/handlers/peer/v1"
 	"dmatech.ru/internal/modules/notifications/sender"
 	"dmatech.ru/internal/modules/notifications/template"
 	deliveryv1 "dmatech.ru/internal/pkg/contracts/peer/common/v1/delivery"
 
 	"dmatech.ru/internal/pkg/config"
+	"dmatech.ru/internal/pkg/locale"
 	"dmatech.ru/internal/pkg/logger"
 	"dmatech.ru/internal/pkg/mq"
 	"dmatech.ru/internal/pkg/natsrpc"
@@ -68,7 +71,12 @@ func initialization(ctx context.Context) error {
 	// проксировать, вызывающие модули адресуются напрямую по имени/версии
 	// из своего конфига (как identity вызывает captcha, см.
 	// internal/modules/identity/captcha_client.go).
-	_, handler := peerhandler.NewHandler(svc)
+	// locale.ServerInterceptor кладёт локаль запроса (перенесённую через
+	// заголовок исходящего вызова identity, см. locale.ClientInterceptor в
+	// identity/notifications_client.go) в context.Context — Service.Enqueue
+	// читает её оттуда, чтобы выбрать локализованный вариант шаблона (см.
+	// internal/modules/notifications/template и doc-комментарий locale).
+	_, handler := peerhandler.NewHandler(svc, connect.WithInterceptors(locale.ServerInterceptor()))
 	sub, err := natsrpc.ServeHandler(nc, log, cfg.Env, cfg.ServiceName, cfg.AppVersion, handler)
 	if err != nil {
 		return fmt.Errorf("failed to subscribe NotificationService: %w", err)

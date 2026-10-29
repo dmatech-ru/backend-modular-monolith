@@ -230,17 +230,6 @@ func TestCheckIdentifier_ExistsAndNotFound(t *testing.T) {
 	}
 }
 
-func TestStartPhoneVerification_RequiresConsent(t *testing.T) {
-	h, _, _, _ := newTestRegistrationHandler(true)
-
-	_, err := h.StartPhoneVerification(context.Background(), connect.NewRequest(&registrationv1.StartPhoneVerificationRequest{
-		Phone: "+70000000000", PersonalDataConsent: false, PowChallenge: "c", PowNonce: "n",
-	}))
-	if code := connectCode(t, err); code != connect.CodeInvalidArgument {
-		t.Fatalf("code = %v, want CodeInvalidArgument", code)
-	}
-}
-
 func TestStartPhoneVerification_RejectsExistingPhone(t *testing.T) {
 	h, repo, _, _ := newTestRegistrationHandler(true)
 	repo.phones["+70000000000"] = true
@@ -250,6 +239,9 @@ func TestStartPhoneVerification_RejectsExistingPhone(t *testing.T) {
 	}))
 	if code := connectCode(t, err); code != connect.CodeAlreadyExists {
 		t.Fatalf("code = %v, want CodeAlreadyExists", code)
+	}
+	if key := errorKey(t, err); key != "identity.phone.already_exists" {
+		t.Fatalf("key = %q, want %q", key, "identity.phone.already_exists")
 	}
 }
 
@@ -317,6 +309,9 @@ func TestConfirmPhoneVerification_WrongCodeThenTooManyAttempts(t *testing.T) {
 		if code := connectCode(t, lastErr); code != connect.CodeUnauthenticated {
 			t.Fatalf("attempt %d: code = %v, want CodeUnauthenticated", i, code)
 		}
+		if key := errorKey(t, lastErr); key != "identity.code.invalid" {
+			t.Fatalf("attempt %d: key = %q, want %q", i, key, "identity.code.invalid")
+		}
 	}
 
 	_, err = h.ConfirmPhoneVerification(ctx, connect.NewRequest(&registrationv1.ConfirmPhoneVerificationRequest{
@@ -324,6 +319,9 @@ func TestConfirmPhoneVerification_WrongCodeThenTooManyAttempts(t *testing.T) {
 	}))
 	if code := connectCode(t, err); code != connect.CodeResourceExhausted {
 		t.Fatalf("after exceeding attempts: code = %v, want CodeResourceExhausted", code)
+	}
+	if key := errorKey(t, err); key != "identity.code.too_many_attempts" {
+		t.Fatalf("key = %q, want %q", key, "identity.code.too_many_attempts")
 	}
 }
 

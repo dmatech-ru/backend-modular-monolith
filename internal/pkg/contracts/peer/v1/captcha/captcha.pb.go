@@ -7,6 +7,7 @@
 package captchav1
 
 import (
+	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -132,8 +133,15 @@ func (x *IssueChallengeResponse) GetExpiresAt() int64 {
 }
 
 type VerifyChallengeRequest struct {
-	state     protoimpl.MessageState `protogen:"open.v1"`
-	Challenge string                 `protobuf:"bytes,1,opt,name=challenge,proto3" json:"challenge,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// captcha.challenge.required/captcha.nonce.required — единственный
+	// сегодня вызывающий (identity) уже не зовёт VerifyChallenge с пустыми
+	// challenge/nonce (см. verifyPoW в identity/handlers/webapi/v1/
+	// registration.go — пустые значения трактуются как "PoW ещё не решался",
+	// отдельно от этого RPC), но у контракта может быть другой вызывающий в
+	// будущем — статическая форма не должна зависеть от того, что сегодня
+	// единственный клиент и так аккуратен.
+	Challenge string `protobuf:"bytes,1,opt,name=challenge,proto3" json:"challenge,omitempty"`
 	// nonce — решение, подобранное клиентом:
 	// SHA-256(challenge || nonce) должен иметь echoed_difficulty ведущих нулевых бит.
 	Nonce         string `protobuf:"bytes,2,opt,name=nonce,proto3" json:"nonce,omitempty"`
@@ -233,7 +241,7 @@ var File_peer_v1_captcha_captcha_proto protoreflect.FileDescriptor
 
 const file_peer_v1_captcha_captcha_proto_rawDesc = "" +
 	"\n" +
-	"\x1dpeer/v1/captcha/captcha.proto\x12\x0fpeer.captcha.v1\"7\n" +
+	"\x1dpeer/v1/captcha/captcha.proto\x12\x0fpeer.captcha.v1\x1a\x1bbuf/validate/validate.proto\"7\n" +
 	"\x15IssueChallengeRequest\x12\x1e\n" +
 	"\n" +
 	"difficulty\x18\x01 \x01(\x05R\n" +
@@ -242,10 +250,12 @@ const file_peer_v1_captcha_captcha_proto_rawDesc = "" +
 	"\tchallenge\x18\x01 \x01(\tR\tchallenge\x12+\n" +
 	"\x11echoed_difficulty\x18\x02 \x01(\x05R\x10echoedDifficulty\x12\x1d\n" +
 	"\n" +
-	"expires_at\x18\x03 \x01(\x03R\texpiresAt\"L\n" +
-	"\x16VerifyChallengeRequest\x12\x1c\n" +
-	"\tchallenge\x18\x01 \x01(\tR\tchallenge\x12\x14\n" +
-	"\x05nonce\x18\x02 \x01(\tR\x05nonce\"/\n" +
+	"expires_at\x18\x03 \x01(\x03R\texpiresAt\"\xf8\x01\n" +
+	"\x16VerifyChallengeRequest\x12v\n" +
+	"\tchallenge\x18\x01 \x01(\tBX\xbaHU\xba\x01R\n" +
+	"\x1acaptcha.challenge.required\x12\x1bchallenge must not be empty\x1a\x17!this.matches('^\\\\s*$')R\tchallenge\x12f\n" +
+	"\x05nonce\x18\x02 \x01(\tBP\xbaHM\xba\x01J\n" +
+	"\x16captcha.nonce.required\x12\x17nonce must not be empty\x1a\x17!this.matches('^\\\\s*$')R\x05nonce\"/\n" +
 	"\x17VerifyChallengeResponse\x12\x14\n" +
 	"\x05valid\x18\x01 \x01(\bR\x05valid2\xd9\x01\n" +
 	"\x0eCaptchaService\x12a\n" +

@@ -88,10 +88,9 @@ func (h *RegistrationHandler) CheckIdentifier(
 	ctx context.Context,
 	req *connect.Request[registrationv1.CheckIdentifierRequest],
 ) (*connect.Response[registrationv1.CheckIdentifierResponse], error) {
+	// identifier непустой — проверено до вызова этого метода (см.
+	// buf.validate.field.cel на этом поле в registration.proto).
 	identifier := strings.TrimSpace(req.Msg.GetIdentifier())
-	if identifier == "" {
-		return nil, fieldError(connect.CodeInvalidArgument, "identifier", "identifier must not be empty")
-	}
 
 	ok, err := h.verifyPoW(ctx, req.Msg.GetPowChallenge(), req.Msg.GetPowNonce())
 	if err != nil {
@@ -123,13 +122,10 @@ func (h *RegistrationHandler) StartPhoneVerification(
 	ctx context.Context,
 	req *connect.Request[registrationv1.StartPhoneVerificationRequest],
 ) (*connect.Response[registrationv1.StartPhoneVerificationResponse], error) {
+	// phone непустой и personal_data_consent — true: проверено до вызова
+	// этого метода (см. buf.validate.field.cel на этих полях в
+	// registration.proto).
 	phone := strings.TrimSpace(req.Msg.GetPhone())
-	if phone == "" {
-		return nil, fieldError(connect.CodeInvalidArgument, "phone", "phone must not be empty")
-	}
-	if !req.Msg.GetPersonalDataConsent() {
-		return nil, fieldError(connect.CodeInvalidArgument, "personal_data_consent", "personal data consent is required")
-	}
 
 	ok, err := h.verifyPoW(ctx, req.Msg.GetPowChallenge(), req.Msg.GetPowNonce())
 	if err != nil {
@@ -146,7 +142,7 @@ func (h *RegistrationHandler) StartPhoneVerification(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	if exists {
-		return nil, connect.NewError(connect.CodeAlreadyExists, errors.New("phone is already registered"))
+		return nil, keyedError(connect.CodeAlreadyExists, "identity.phone.already_exists", "phone is already registered")
 	}
 
 	code, err := generateOTP()
@@ -172,11 +168,10 @@ func (h *RegistrationHandler) ConfirmPhoneVerification(
 	ctx context.Context,
 	req *connect.Request[registrationv1.ConfirmPhoneVerificationRequest],
 ) (*connect.Response[registrationv1.ConfirmPhoneVerificationResponse], error) {
+	// registration_session_id/code непусты — проверено до вызова этого
+	// метода (см. buf.validate.field.cel на этих полях в registration.proto).
 	sessionID := strings.TrimSpace(req.Msg.GetRegistrationSessionId())
 	code := strings.TrimSpace(req.Msg.GetCode())
-	if sessionID == "" || code == "" {
-		return nil, fieldError(connect.CodeInvalidArgument, "code", "registration_session_id and code are required")
-	}
 
 	err := h.repo.VerifyPhoneCode(ctx, sessionID, hashOTP(code))
 	if cerr := mapVerifyCodeError(err); cerr != nil {
@@ -190,11 +185,10 @@ func (h *RegistrationHandler) StartEmailVerification(
 	ctx context.Context,
 	req *connect.Request[registrationv1.StartEmailVerificationRequest],
 ) (*connect.Response[registrationv1.StartEmailVerificationResponse], error) {
+	// registration_session_id/email непусты — проверено до вызова этого
+	// метода (см. buf.validate.field.cel на этих полях в registration.proto).
 	sessionID := strings.TrimSpace(req.Msg.GetRegistrationSessionId())
 	email := strings.TrimSpace(req.Msg.GetEmail())
-	if sessionID == "" || email == "" {
-		return nil, fieldError(connect.CodeInvalidArgument, "email", "registration_session_id and email are required")
-	}
 
 	ok, err := h.verifyPoW(ctx, req.Msg.GetPowChallenge(), req.Msg.GetPowNonce())
 	if err != nil {
@@ -211,7 +205,7 @@ func (h *RegistrationHandler) StartEmailVerification(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	if exists {
-		return nil, connect.NewError(connect.CodeAlreadyExists, errors.New("email is already registered"))
+		return nil, keyedError(connect.CodeAlreadyExists, "identity.email.already_exists", "email is already registered")
 	}
 
 	code, err := generateOTP()
@@ -221,9 +215,9 @@ func (h *RegistrationHandler) StartEmailVerification(
 	err = h.repo.StartEmailVerification(ctx, sessionID, email, hashOTP(code))
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
-		return nil, connect.NewError(connect.CodeNotFound, errors.New("registration session not found or expired"))
+		return nil, keyedError(connect.CodeNotFound, "identity.registration_session.not_found", "registration session not found or expired")
 	case errors.Is(err, repository.ErrPhoneNotVerified):
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("phone must be verified first"))
+		return nil, keyedError(connect.CodeFailedPrecondition, "identity.phone.not_verified", "phone must be verified first")
 	case err != nil:
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -242,11 +236,10 @@ func (h *RegistrationHandler) ConfirmEmailVerification(
 	ctx context.Context,
 	req *connect.Request[registrationv1.ConfirmEmailVerificationRequest],
 ) (*connect.Response[registrationv1.ConfirmEmailVerificationResponse], error) {
+	// registration_session_id/code непусты — проверено до вызова этого
+	// метода (см. buf.validate.field.cel на этих полях в registration.proto).
 	sessionID := strings.TrimSpace(req.Msg.GetRegistrationSessionId())
 	code := strings.TrimSpace(req.Msg.GetCode())
-	if sessionID == "" || code == "" {
-		return nil, fieldError(connect.CodeInvalidArgument, "code", "registration_session_id and code are required")
-	}
 
 	err := h.repo.VerifyEmailCode(ctx, sessionID, hashOTP(code))
 	if cerr := mapVerifyCodeError(err); cerr != nil {
@@ -261,17 +254,16 @@ func (h *RegistrationHandler) CompleteRegistration(
 	ctx context.Context,
 	req *connect.Request[registrationv1.CompleteRegistrationRequest],
 ) (*connect.Response[registrationv1.CompleteRegistrationResponse], error) {
+	// registration_session_id/salt непусты — проверено до вызова этого
+	// метода (см. buf.validate.field.cel на этих полях в registration.proto).
+	// verifier — не просто "непусто", а правдоподобный элемент группы SRP
+	// (граница размера — деталь internal/pkg/srp, не формы запроса), эта
+	// проверка остаётся здесь.
 	sessionID := strings.TrimSpace(req.Msg.GetRegistrationSessionId())
-	if sessionID == "" {
-		return nil, fieldError(connect.CodeInvalidArgument, "registration_session_id", "registration_session_id must not be empty")
-	}
 	salt := req.Msg.GetSalt()
 	verifier := req.Msg.GetVerifier()
-	if len(salt) == 0 {
-		return nil, fieldError(connect.CodeInvalidArgument, "salt", "salt must not be empty")
-	}
 	if !srp.ValidVerifier(verifier) {
-		return nil, fieldError(connect.CodeInvalidArgument, "verifier", "verifier is missing or malformed")
+		return nil, fieldError(connect.CodeInvalidArgument, "verifier", "identity.verifier.invalid", "verifier is missing or malformed")
 	}
 
 	userID, err := h.repo.CompleteRegistration(ctx, sessionID, repository.CompleteRegistrationParams{
@@ -283,13 +275,13 @@ func (h *RegistrationHandler) CompleteRegistration(
 	})
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
-		return nil, connect.NewError(connect.CodeNotFound, errors.New("registration session not found or expired"))
+		return nil, keyedError(connect.CodeNotFound, "identity.registration_session.not_found", "registration session not found or expired")
 	case errors.Is(err, repository.ErrPhoneNotVerified):
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("phone must be verified first"))
+		return nil, keyedError(connect.CodeFailedPrecondition, "identity.phone.not_verified", "phone must be verified first")
 	case errors.Is(err, repository.ErrEmailNotVerified):
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("email must be verified first"))
+		return nil, keyedError(connect.CodeFailedPrecondition, "identity.email.not_verified", "email must be verified first")
 	case errors.Is(err, repository.ErrAlreadyExists):
-		return nil, connect.NewError(connect.CodeAlreadyExists, errors.New("account already exists"))
+		return nil, keyedError(connect.CodeAlreadyExists, "identity.account.already_exists", "account already exists")
 	case err != nil:
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -304,11 +296,11 @@ func mapVerifyCodeError(err error) error {
 	case err == nil:
 		return nil
 	case errors.Is(err, repository.ErrNotFound):
-		return connect.NewError(connect.CodeNotFound, errors.New("registration session not found or expired"))
+		return keyedError(connect.CodeNotFound, "identity.registration_session.not_found", "registration session not found or expired")
 	case errors.Is(err, repository.ErrTooManyAttempts):
-		return connect.NewError(connect.CodeResourceExhausted, errors.New("too many attempts, request a new code"))
+		return keyedError(connect.CodeResourceExhausted, "identity.code.too_many_attempts", "too many attempts, request a new code")
 	case errors.Is(err, repository.ErrCodeMismatch):
-		return connect.NewError(connect.CodeUnauthenticated, errors.New("invalid code"))
+		return keyedError(connect.CodeUnauthenticated, "identity.code.invalid", "invalid code")
 	default:
 		return connect.NewError(connect.CodeInternal, err)
 	}

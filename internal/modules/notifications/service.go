@@ -12,6 +12,7 @@ import (
 	"dmatech.ru/internal/modules/notifications/template"
 	deliveryv1 "dmatech.ru/internal/pkg/contracts/peer/common/v1/delivery"
 	notificationsv1 "dmatech.ru/internal/pkg/contracts/peer/v1/notifications"
+	"dmatech.ru/internal/pkg/locale"
 	"dmatech.ru/internal/pkg/mq"
 )
 
@@ -48,14 +49,18 @@ func NewService(js jetstream.JetStream, env string, renderer *template.Renderer,
 	return &Service{js: js, env: env, renderer: renderer, senders: senders, log: log}
 }
 
-// Enqueue рендерит шаблон req.TemplateKey для req.Channel и кладёт
-// результат в очередь.
+// Enqueue рендерит шаблон req.TemplateKey для req.Channel на локали
+// текущего запроса (locale.FromContext — положена туда locale.
+// ServerInterceptor, см. notifications.go) и кладёт результат в очередь.
+// Локаль читается здесь, а не в deliverFor: рендеринг — разовая операция на
+// Enqueue (см. комментарий ниже), доставка асинхронна и не видит исходный
+// ctx запроса.
 func (s *Service) Enqueue(ctx context.Context, req *notificationsv1.SendRequest) error {
 	if _, ok := s.senders[req.GetChannel()]; !ok {
 		return fmt.Errorf("%w: %v", errUnknownChannel, req.GetChannel())
 	}
 
-	subject, body, err := s.renderer.Render(req.GetTemplateKey(), req.GetChannel(), req.GetVariables())
+	subject, body, err := s.renderer.Render(req.GetTemplateKey(), req.GetChannel(), locale.FromContext(ctx), req.GetVariables())
 	if err != nil {
 		return fmt.Errorf("notifications: render template: %w", err)
 	}

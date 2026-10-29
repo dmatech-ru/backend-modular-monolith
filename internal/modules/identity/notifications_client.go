@@ -11,6 +11,7 @@ import (
 	templatesv1 "dmatech.ru/internal/pkg/contracts/peer/common/v1/templates"
 	notificationspeerv1 "dmatech.ru/internal/pkg/contracts/peer/v1/notifications"
 	"dmatech.ru/internal/pkg/contracts/peer/v1/notifications/notificationsv1connect"
+	"dmatech.ru/internal/pkg/locale"
 	"dmatech.ru/internal/pkg/natsrpc"
 )
 
@@ -19,9 +20,18 @@ import (
 // идёт), тем же приёмом, что identity уже зовёт captcha (см.
 // captcha_client.go): identity знает только сгенерированные типы и
 // имя/версию сервиса из своего конфига, без Go-импорта internal/modules/notifications.
+//
+// locale.ClientInterceptor переносит локаль текущего запроса (положенную в
+// context.Context при входе в identity, см. locale.ServerInterceptor в
+// auth.handler.go) в заголовок этого исходящего вызова — notifications
+// рендерит шаблон на этой локали (см. internal/modules/notifications/
+// template). Без этого интерцептора локаль обрывалась бы на границе
+// identity: natsrpc переносит заголовки байт-в-байт, но не копирует
+// context.Context в заголовки сам.
 func newNotificationsClient(nc *nats.Conn, env, serviceName, version string) notificationsv1connect.NotificationServiceClient {
 	httpClient := natsrpc.NewClient(nc, env, serviceName, version, notificationsCallTimeout)
-	return notificationsv1connect.NewNotificationServiceClient(httpClient, "http://"+serviceName)
+	return notificationsv1connect.NewNotificationServiceClient(httpClient, "http://"+serviceName,
+		connect.WithInterceptors(locale.ClientInterceptor()))
 }
 
 // otpPhoneSender/otpEmailSender реализуют authhandler.PhoneSender/

@@ -242,6 +242,9 @@ func TestSendRecoveryCode_RejectsUnavailableChannel(t *testing.T) {
 	if code := connectCode(t, err); code != connect.CodeInvalidArgument {
 		t.Fatalf("code = %v, want CodeInvalidArgument", code)
 	}
+	if key := errorKey(t, err); key != "identity.recovery_channel.unavailable" {
+		t.Fatalf("key = %q, want %q", key, "identity.recovery_channel.unavailable")
+	}
 }
 
 func TestSendRecoveryCode_SendsToEmailDestination(t *testing.T) {
@@ -318,6 +321,9 @@ func TestResetPassword_RequiresConfirmedCode(t *testing.T) {
 	}))
 	if code := connectCode(t, err); code != connect.CodeFailedPrecondition {
 		t.Fatalf("code = %v, want CodeFailedPrecondition before the code is confirmed", code)
+	}
+	if key := errorKey(t, err); key != "identity.recovery_code.not_confirmed" {
+		t.Fatalf("key = %q, want %q", key, "identity.recovery_code.not_confirmed")
 	}
 }
 

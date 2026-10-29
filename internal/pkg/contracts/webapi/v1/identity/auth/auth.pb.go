@@ -7,6 +7,7 @@
 package authv1
 
 import (
+	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -22,8 +23,11 @@ const (
 )
 
 type InitializeSessionRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Identifier    string                 `protobuf:"bytes,1,opt,name=identifier,proto3" json:"identifier,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// identity.identifier.required — общий для identity-модуля ключ (см.
+	// doc-комментарий ErrorPayload в webapi/v1/common/errors.proto): то же
+	// поле с тем же смыслом в CheckIdentifier/InitiateRecovery.
+	Identifier    string `protobuf:"bytes,1,opt,name=identifier,proto3" json:"identifier,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -240,21 +244,25 @@ var File_webapi_v1_identity_auth_auth_proto protoreflect.FileDescriptor
 
 const file_webapi_v1_identity_auth_auth_proto_rawDesc = "" +
 	"\n" +
-	"\"webapi/v1/identity/auth/auth.proto\x12\x17webapi.identity.auth.v1\":\n" +
-	"\x18InitializeSessionRequest\x12\x1e\n" +
+	"\"webapi/v1/identity/auth/auth.proto\x12\x17webapi.identity.auth.v1\x1a\x1bbuf/validate/validate.proto\"\x97\x01\n" +
+	"\x18InitializeSessionRequest\x12{\n" +
 	"\n" +
-	"identifier\x18\x01 \x01(\tR\n" +
+	"identifier\x18\x01 \x01(\tB[\xbaHX\xba\x01U\n" +
+	"\x1cidentity.identifier.required\x12\x1cidentifier must not be empty\x1a\x17!this.matches('^\\\\s*$')R\n" +
 	"identifier\"s\n" +
 	"\x19InitializeSessionResponse\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x12\n" +
 	"\x04salt\x18\x02 \x01(\fR\x04salt\x12#\n" +
-	"\rserver_public\x18\x03 \x01(\fR\fserverPublic\"\x86\x01\n" +
-	"\x1dCompleteAuthenticationRequest\x12\x1d\n" +
+	"\rserver_public\x18\x03 \x01(\fR\fserverPublic\"\x97\x03\n" +
+	"\x1dCompleteAuthenticationRequest\x12z\n" +
 	"\n" +
-	"session_id\x18\x01 \x01(\tR\tsessionId\x12#\n" +
-	"\rclient_public\x18\x02 \x01(\fR\fclientPublic\x12!\n" +
-	"\fclient_proof\x18\x03 \x01(\fR\vclientProof\"C\n" +
+	"session_id\x18\x01 \x01(\tB[\xbaHX\xba\x01U\n" +
+	"\x1cidentity.session_id.required\x12\x1csession_id must not be empty\x1a\x17!this.matches('^\\\\s*$')R\tsessionId\x12~\n" +
+	"\rclient_public\x18\x02 \x01(\fBY\xbaHV\xba\x01S\n" +
+	"\x1fidentity.client_public.required\x12\x1fclient_public must not be empty\x1a\x0fthis.size() > 0R\fclientPublic\x12z\n" +
+	"\fclient_proof\x18\x03 \x01(\fBW\xbaHT\xba\x01Q\n" +
+	"\x1eidentity.client_proof.required\x12\x1eclient_proof must not be empty\x1a\x0fthis.size() > 0R\vclientProof\"C\n" +
 	"\x1eCompleteAuthenticationResponse\x12!\n" +
 	"\fserver_proof\x18\x01 \x01(\fR\vserverProof2\x9d\x02\n" +
 	"\x13IdentityAuthService\x12z\n" +

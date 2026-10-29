@@ -22,6 +22,7 @@ import (
 	"dmatech.ru/internal/pkg/protoset"
 	"dmatech.ru/internal/pkg/service"
 	"dmatech.ru/internal/pkg/setup"
+	"dmatech.ru/internal/pkg/validation"
 )
 
 const (
@@ -86,6 +87,11 @@ func initialization(ctx context.Context) error {
 		return nil
 	})
 
+	validator, err := validation.NewValidator()
+	if err != nil {
+		return fmt.Errorf("identity: %w", err)
+	}
+
 	descriptorBytes, err := protoset.Build(
 		authv1.File_webapi_v1_identity_auth_auth_proto,
 		registrationv1.File_webapi_v1_identity_registration_registration_proto,
@@ -109,7 +115,7 @@ func initialization(ctx context.Context) error {
 	recoveryCodes := &recoveryCodeSender{client: notifications}
 	passwordResetFreeze := time.Duration(cfg.PasswordResetFreezeHours) * time.Hour
 
-	sub, err := authhandler.Subscribe(nc, log, cfg.Env, cfg.ServiceName, cfg.AppVersion,
+	sub, err := authhandler.Subscribe(nc, log, cfg.Env, cfg.ServiceName, cfg.AppVersion, validator,
 		repo, antiEnumKey, repo, captcha, phones, emails,
 		repo, recoveryCodes, passwordResetFreeze)
 	if err != nil {

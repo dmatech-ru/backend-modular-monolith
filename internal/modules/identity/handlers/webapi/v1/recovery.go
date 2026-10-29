@@ -187,10 +187,9 @@ func (h *RecoveryHandler) InitiateRecovery(
 	ctx context.Context,
 	req *connect.Request[recoveryv1.InitiateRecoveryRequest],
 ) (*connect.Response[recoveryv1.InitiateRecoveryResponse], error) {
+	// identifier непустой — проверено до вызова этого метода (см.
+	// buf.validate.field.cel на этом поле в recovery.proto).
 	identifier := strings.TrimSpace(req.Msg.GetIdentifier())
-	if identifier == "" {
-		return nil, fieldError(connect.CodeInvalidArgument, "identifier", "identifier must not be empty")
-	}
 
 	ok, err := h.verifyPoW(ctx, req.Msg.GetPowChallenge(), req.Msg.GetPowNonce())
 	if err != nil {
@@ -243,10 +242,9 @@ func (h *RecoveryHandler) SendRecoveryCode(
 	ctx context.Context,
 	req *connect.Request[recoveryv1.SendRecoveryCodeRequest],
 ) (*connect.Response[recoveryv1.SendRecoveryCodeResponse], error) {
+	// recovery_session_id непустой — проверено до вызова этого метода (см.
+	// buf.validate.field.cel на этом поле в recovery.proto).
 	sessionID := strings.TrimSpace(req.Msg.GetRecoverySessionId())
-	if sessionID == "" {
-		return nil, fieldError(connect.CodeInvalidArgument, "recovery_session_id", "recovery_session_id must not be empty")
-	}
 
 	ok, err := h.verifyPoW(ctx, req.Msg.GetPowChallenge(), req.Msg.GetPowNonce())
 	if err != nil {
@@ -261,18 +259,18 @@ func (h *RecoveryHandler) SendRecoveryCode(
 	session, err := h.repo.GetRecoverySession(ctx, sessionID)
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
-		return nil, connect.NewError(connect.CodeNotFound, errors.New("recovery session not found or expired"))
+		return nil, keyedError(connect.CodeNotFound, "identity.recovery_session.not_found", "recovery session not found or expired")
 	case err != nil:
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
 	destination, ok := recoveryDestination(session.RecoveryAccount, req.Msg.GetChannel())
 	if !ok {
-		return nil, fieldError(connect.CodeInvalidArgument, "channel", "channel is not available for this recovery session")
+		return nil, fieldError(connect.CodeInvalidArgument, "channel", "identity.recovery_channel.unavailable", "channel is not available for this recovery session")
 	}
 	peerChannel, ok := toPeerChannel(req.Msg.GetChannel())
 	if !ok {
-		return nil, fieldError(connect.CodeInvalidArgument, "channel", "unknown channel")
+		return nil, fieldError(connect.CodeInvalidArgument, "channel", "identity.channel.unknown", "unknown channel")
 	}
 
 	code, err := generateOTP()
@@ -282,7 +280,7 @@ func (h *RecoveryHandler) SendRecoveryCode(
 
 	if err := h.repo.SetRecoveryCode(ctx, sessionID, hashOTP(code)); err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			return nil, connect.NewError(connect.CodeNotFound, errors.New("recovery session not found or expired"))
+			return nil, keyedError(connect.CodeNotFound, "identity.recovery_session.not_found", "recovery session not found or expired")
 		}
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -303,11 +301,10 @@ func (h *RecoveryHandler) ConfirmRecoveryCode(
 	ctx context.Context,
 	req *connect.Request[recoveryv1.ConfirmRecoveryCodeRequest],
 ) (*connect.Response[recoveryv1.ConfirmRecoveryCodeResponse], error) {
+	// recovery_session_id/code непусты — проверено до вызова этого метода
+	// (см. buf.validate.field.cel на этих полях в recovery.proto).
 	sessionID := strings.TrimSpace(req.Msg.GetRecoverySessionId())
 	code := strings.TrimSpace(req.Msg.GetCode())
-	if sessionID == "" || code == "" {
-		return nil, fieldError(connect.CodeInvalidArgument, "code", "recovery_session_id and code are required")
-	}
 
 	err := h.repo.VerifyRecoveryCode(ctx, sessionID, hashOTP(code))
 	if cerr := mapVerifyCodeError(err); cerr != nil {
@@ -323,25 +320,23 @@ func (h *RecoveryHandler) ResetPassword(
 	ctx context.Context,
 	req *connect.Request[recoveryv1.ResetPasswordRequest],
 ) (*connect.Response[recoveryv1.ResetPasswordResponse], error) {
+	// recovery_session_id/salt непусты — проверено до вызова этого метода
+	// (см. buf.validate.field.cel на этих полях в recovery.proto). verifier
+	// — не просто "непусто", а правдоподобный элемент группы SRP (см. тот
+	// же комментарий у CompleteRegistrationRequest.verifier в registration.go).
 	sessionID := strings.TrimSpace(req.Msg.GetRecoverySessionId())
-	if sessionID == "" {
-		return nil, fieldError(connect.CodeInvalidArgument, "recovery_session_id", "recovery_session_id must not be empty")
-	}
 	salt := req.Msg.GetSalt()
 	verifier := req.Msg.GetVerifier()
-	if len(salt) == 0 {
-		return nil, fieldError(connect.CodeInvalidArgument, "salt", "salt must not be empty")
-	}
 	if !srp.ValidVerifier(verifier) {
-		return nil, fieldError(connect.CodeInvalidArgument, "verifier", "verifier is missing or malformed")
+		return nil, fieldError(connect.CodeInvalidArgument, "verifier", "identity.verifier.invalid", "verifier is missing or malformed")
 	}
 
 	_, changedAt, err := h.repo.ResetRecoveryPassword(ctx, sessionID, salt, verifier)
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
-		return nil, connect.NewError(connect.CodeNotFound, errors.New("recovery session not found or expired"))
+		return nil, keyedError(connect.CodeNotFound, "identity.recovery_session.not_found", "recovery session not found or expired")
 	case errors.Is(err, repository.ErrRecoveryCodeNotVerified):
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("recovery code must be confirmed first"))
+		return nil, keyedError(connect.CodeFailedPrecondition, "identity.recovery_code.not_confirmed", "recovery code must be confirmed first")
 	case err != nil:
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

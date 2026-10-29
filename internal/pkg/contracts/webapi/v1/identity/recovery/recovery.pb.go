@@ -7,6 +7,7 @@
 package recoveryv1
 
 import (
+	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -181,10 +182,15 @@ func (SendRecoveryCodeResponse_Status) EnumDescriptor() ([]byte, []int) {
 }
 
 type InitiateRecoveryRequest struct {
-	state      protoimpl.MessageState `protogen:"open.v1"`
-	Identifier string                 `protobuf:"bytes,1,opt,name=identifier,proto3" json:"identifier,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// identity.identifier.required — тот же ключ, что у
+	// IdentityAuthService.InitializeSession/IdentityRegistrationService.
+	// CheckIdentifier (один смысл поля — один ключ, см. doc-комментарий
+	// ErrorPayload в webapi/v1/common/errors.proto).
+	Identifier string `protobuf:"bytes,1,opt,name=identifier,proto3" json:"identifier,omitempty"`
 	// pow_challenge/pow_nonce — см. комментарий сервиса; пусты в первой
-	// попытке, заполняются после получения STATUS_CAPTCHA_REQUIRED.
+	// попытке, заполняются после получения STATUS_CAPTCHA_REQUIRED. Не
+	// required: пустое значение здесь легитимно (первая попытка), не ошибка.
 	PowChallenge  string `protobuf:"bytes,2,opt,name=pow_challenge,json=powChallenge,proto3" json:"pow_challenge,omitempty"`
 	PowNonce      string `protobuf:"bytes,3,opt,name=pow_nonce,json=powNonce,proto3" json:"pow_nonce,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -363,11 +369,14 @@ func (x *InitiateRecoveryResponse) GetAvailableMethods() []*AvailableMethod {
 type SendRecoveryCodeRequest struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	RecoverySessionId string                 `protobuf:"bytes,1,opt,name=recovery_session_id,json=recoverySessionId,proto3" json:"recovery_session_id,omitempty"`
-	Channel           DeliveryChannel        `protobuf:"varint,2,opt,name=channel,proto3,enum=webapi.identity.recovery.v1.DeliveryChannel" json:"channel,omitempty"`
-	PowChallenge      string                 `protobuf:"bytes,3,opt,name=pow_challenge,json=powChallenge,proto3" json:"pow_challenge,omitempty"`
-	PowNonce          string                 `protobuf:"bytes,4,opt,name=pow_nonce,json=powNonce,proto3" json:"pow_nonce,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// channel: доступность конкретного канала для этой сессии — бизнес-правило
+	// (см. SendRecoveryCode в хендлере), не статическая форма, поэтому вне
+	// buf.validate; DELIVERY_CHANNEL_UNSPECIFIED тоже отсекается там же.
+	Channel       DeliveryChannel `protobuf:"varint,2,opt,name=channel,proto3,enum=webapi.identity.recovery.v1.DeliveryChannel" json:"channel,omitempty"`
+	PowChallenge  string          `protobuf:"bytes,3,opt,name=pow_challenge,json=powChallenge,proto3" json:"pow_challenge,omitempty"`
+	PowNonce      string          `protobuf:"bytes,4,opt,name=pow_nonce,json=powNonce,proto3" json:"pow_nonce,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SendRecoveryCodeRequest) Reset() {
@@ -475,9 +484,11 @@ func (x *SendRecoveryCodeResponse) GetStatus() SendRecoveryCodeResponse_Status {
 type ConfirmRecoveryCodeRequest struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	RecoverySessionId string                 `protobuf:"bytes,1,opt,name=recovery_session_id,json=recoverySessionId,proto3" json:"recovery_session_id,omitempty"`
-	Code              string                 `protobuf:"bytes,2,opt,name=code,proto3" json:"code,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// identity.code.required — тот же ключ, что у Confirm{Phone,Email}
+	// VerificationRequest.code в registration.proto.
+	Code          string `protobuf:"bytes,2,opt,name=code,proto3" json:"code,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ConfirmRecoveryCodeRequest) Reset() {
@@ -565,7 +576,12 @@ type ResetPasswordRequest struct {
 	RecoverySessionId string                 `protobuf:"bytes,1,opt,name=recovery_session_id,json=recoverySessionId,proto3" json:"recovery_session_id,omitempty"`
 	// salt, verifier — см. комментарий сервиса; как и в
 	// IdentityRegistrationService.CompleteRegistration, пароль сюда не попадает.
-	Salt          []byte `protobuf:"bytes,2,opt,name=salt,proto3" json:"salt,omitempty"`
+	// identity.salt.required — тот же ключ, что у CompleteRegistrationRequest.salt.
+	Salt []byte `protobuf:"bytes,2,opt,name=salt,proto3" json:"salt,omitempty"`
+	// verifier — форма (не просто "непусто", а правдоподобный элемент группы
+	// SRP) проверяется в Go (srp.ValidVerifier), не здесь: граница размера —
+	// деталь реализации SRP-группы (internal/pkg/srp), а не формы запроса,
+	// дублировать её магическим числом в .proto не стоит.
 	Verifier      []byte `protobuf:"bytes,3,opt,name=verifier,proto3" json:"verifier,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -673,10 +689,11 @@ var File_webapi_v1_identity_recovery_recovery_proto protoreflect.FileDescriptor
 
 const file_webapi_v1_identity_recovery_recovery_proto_rawDesc = "" +
 	"\n" +
-	"*webapi/v1/identity/recovery/recovery.proto\x12\x1bwebapi.identity.recovery.v1\"{\n" +
-	"\x17InitiateRecoveryRequest\x12\x1e\n" +
+	"*webapi/v1/identity/recovery/recovery.proto\x12\x1bwebapi.identity.recovery.v1\x1a\x1bbuf/validate/validate.proto\"\xd8\x01\n" +
+	"\x17InitiateRecoveryRequest\x12{\n" +
 	"\n" +
-	"identifier\x18\x01 \x01(\tR\n" +
+	"identifier\x18\x01 \x01(\tB[\xbaHX\xba\x01U\n" +
+	"\x1cidentity.identifier.required\x12\x1cidentifier must not be empty\x1a\x17!this.matches('^\\\\s*$')R\n" +
 	"identifier\x12#\n" +
 	"\rpow_challenge\x18\x02 \x01(\tR\fpowChallenge\x12\x1b\n" +
 	"\tpow_nonce\x18\x03 \x01(\tR\bpowNonce\"\x88\x01\n" +
@@ -691,9 +708,10 @@ const file_webapi_v1_identity_recovery_recovery_proto_rawDesc = "" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10STATUS_AVAILABLE\x10\x01\x12\x14\n" +
 	"\x10STATUS_NOT_FOUND\x10\x02\x12\x1b\n" +
-	"\x17STATUS_CAPTCHA_REQUIRED\x10\x03\"\xd3\x01\n" +
-	"\x17SendRecoveryCodeRequest\x12.\n" +
-	"\x13recovery_session_id\x18\x01 \x01(\tR\x11recoverySessionId\x12F\n" +
+	"\x17STATUS_CAPTCHA_REQUIRED\x10\x03\"\xc3\x02\n" +
+	"\x17SendRecoveryCodeRequest\x12\x9d\x01\n" +
+	"\x13recovery_session_id\x18\x01 \x01(\tBm\xbaHj\xba\x01g\n" +
+	"%identity.recovery_session_id.required\x12%recovery_session_id must not be empty\x1a\x17!this.matches('^\\\\s*$')R\x11recoverySessionId\x12F\n" +
 	"\achannel\x18\x02 \x01(\x0e2,.webapi.identity.recovery.v1.DeliveryChannelR\achannel\x12#\n" +
 	"\rpow_challenge\x18\x03 \x01(\tR\fpowChallenge\x12\x1b\n" +
 	"\tpow_nonce\x18\x04 \x01(\tR\bpowNonce\"\xc0\x01\n" +
@@ -702,14 +720,18 @@ const file_webapi_v1_identity_recovery_recovery_proto_rawDesc = "" +
 	"\x06Status\x12\x16\n" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vSTATUS_SENT\x10\x01\x12\x1b\n" +
-	"\x17STATUS_CAPTCHA_REQUIRED\x10\x02\"`\n" +
-	"\x1aConfirmRecoveryCodeRequest\x12.\n" +
-	"\x13recovery_session_id\x18\x01 \x01(\tR\x11recoverySessionId\x12\x12\n" +
-	"\x04code\x18\x02 \x01(\tR\x04code\"\x1d\n" +
-	"\x1bConfirmRecoveryCodeResponse\"v\n" +
-	"\x14ResetPasswordRequest\x12.\n" +
-	"\x13recovery_session_id\x18\x01 \x01(\tR\x11recoverySessionId\x12\x12\n" +
-	"\x04salt\x18\x02 \x01(\fR\x04salt\x12\x1a\n" +
+	"\x17STATUS_CAPTCHA_REQUIRED\x10\x02\"\xa1\x02\n" +
+	"\x1aConfirmRecoveryCodeRequest\x12\x9d\x01\n" +
+	"\x13recovery_session_id\x18\x01 \x01(\tBm\xbaHj\xba\x01g\n" +
+	"%identity.recovery_session_id.required\x12%recovery_session_id must not be empty\x1a\x17!this.matches('^\\\\s*$')R\x11recoverySessionId\x12c\n" +
+	"\x04code\x18\x02 \x01(\tBO\xbaHL\xba\x01I\n" +
+	"\x16identity.code.required\x12\x16code must not be empty\x1a\x17!this.matches('^\\\\s*$')R\x04code\"\x1d\n" +
+	"\x1bConfirmRecoveryCodeResponse\"\xaf\x02\n" +
+	"\x14ResetPasswordRequest\x12\x9d\x01\n" +
+	"\x13recovery_session_id\x18\x01 \x01(\tBm\xbaHj\xba\x01g\n" +
+	"%identity.recovery_session_id.required\x12%recovery_session_id must not be empty\x1a\x17!this.matches('^\\\\s*$')R\x11recoverySessionId\x12[\n" +
+	"\x04salt\x18\x02 \x01(\fBG\xbaHD\xba\x01A\n" +
+	"\x16identity.salt.required\x12\x16salt must not be empty\x1a\x0fthis.size() > 0R\x04salt\x12\x1a\n" +
 	"\bverifier\x18\x03 \x01(\fR\bverifier\":\n" +
 	"\x15ResetPasswordResponse\x12!\n" +
 	"\ffrozen_until\x18\x01 \x01(\x03R\vfrozenUntil*\xa2\x01\n" +

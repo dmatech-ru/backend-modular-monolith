@@ -7,6 +7,7 @@
 package registrationv1
 
 import (
+	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -177,8 +178,10 @@ func (StartEmailVerificationResponse_Status) EnumDescriptor() ([]byte, []int) {
 }
 
 type CheckIdentifierRequest struct {
-	state      protoimpl.MessageState `protogen:"open.v1"`
-	Identifier string                 `protobuf:"bytes,1,opt,name=identifier,proto3" json:"identifier,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// identity.identifier.required — см. doc-комментарий ErrorPayload в
+	// webapi/v1/common/errors.proto.
+	Identifier string `protobuf:"bytes,1,opt,name=identifier,proto3" json:"identifier,omitempty"`
 	// pow_challenge/pow_nonce — пусты в первой попытке. Если сервер ответит
 	// STATUS_CAPTCHA_REQUIRED, клиент получает challenge отдельным вызовом
 	// webapi.captcha.v1.CaptchaService.IssueChallenge, решает его и повторяет
@@ -707,7 +710,10 @@ type CompleteRegistrationRequest struct {
 	state                 protoimpl.MessageState `protogen:"open.v1"`
 	RegistrationSessionId string                 `protobuf:"bytes,1,opt,name=registration_session_id,json=registrationSessionId,proto3" json:"registration_session_id,omitempty"`
 	// salt, verifier — см. комментарий у IdentityAuthService.Register в auth.proto.
-	Salt          []byte `protobuf:"bytes,2,opt,name=salt,proto3" json:"salt,omitempty"`
+	Salt []byte `protobuf:"bytes,2,opt,name=salt,proto3" json:"salt,omitempty"`
+	// verifier — форма (SRP-правдоподобность, не просто "непусто") проверяется
+	// в Go (srp.ValidVerifier) — см. тот же комментарий у ResetPasswordRequest.
+	// verifier в recovery.proto.
 	Verifier      []byte `protobuf:"bytes,3,opt,name=verifier,proto3" json:"verifier,omitempty"`
 	FirstName     string `protobuf:"bytes,4,opt,name=first_name,json=firstName,proto3" json:"first_name,omitempty"`
 	LastName      string `protobuf:"bytes,5,opt,name=last_name,json=lastName,proto3" json:"last_name,omitempty"`
@@ -836,10 +842,11 @@ var File_webapi_v1_identity_registration_registration_proto protoreflect.FileDes
 
 const file_webapi_v1_identity_registration_registration_proto_rawDesc = "" +
 	"\n" +
-	"2webapi/v1/identity/registration/registration.proto\x12\x1fwebapi.identity.registration.v1\"z\n" +
-	"\x16CheckIdentifierRequest\x12\x1e\n" +
+	"2webapi/v1/identity/registration/registration.proto\x12\x1fwebapi.identity.registration.v1\x1a\x1bbuf/validate/validate.proto\"\xd7\x01\n" +
+	"\x16CheckIdentifierRequest\x12{\n" +
 	"\n" +
-	"identifier\x18\x01 \x01(\tR\n" +
+	"identifier\x18\x01 \x01(\tB[\xbaHX\xba\x01U\n" +
+	"\x1cidentity.identifier.required\x12\x1cidentifier must not be empty\x1a\x17!this.matches('^\\\\s*$')R\n" +
 	"identifier\x12#\n" +
 	"\rpow_challenge\x18\x02 \x01(\tR\fpowChallenge\x12\x1b\n" +
 	"\tpow_nonce\x18\x03 \x01(\tR\bpowNonce\"\xda\x01\n" +
@@ -849,10 +856,12 @@ const file_webapi_v1_identity_registration_registration_proto_rawDesc = "" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\x11\n" +
 	"\rSTATUS_EXISTS\x10\x01\x12\x14\n" +
 	"\x10STATUS_NOT_FOUND\x10\x02\x12\x1b\n" +
-	"\x17STATUS_CAPTCHA_REQUIRED\x10\x03\"\xab\x01\n" +
-	"\x1dStartPhoneVerificationRequest\x12\x14\n" +
-	"\x05phone\x18\x01 \x01(\tR\x05phone\x122\n" +
-	"\x15personal_data_consent\x18\x02 \x01(\bR\x13personalDataConsent\x12#\n" +
+	"\x17STATUS_CAPTCHA_REQUIRED\x10\x03\"\xe1\x02\n" +
+	"\x1dStartPhoneVerificationRequest\x12g\n" +
+	"\x05phone\x18\x01 \x01(\tBQ\xbaHN\xba\x01K\n" +
+	"\x17identity.phone.required\x12\x17phone must not be empty\x1a\x17!this.matches('^\\\\s*$')R\x05phone\x12\x94\x01\n" +
+	"\x15personal_data_consent\x18\x02 \x01(\bB`\xbaH]\xba\x01Z\n" +
+	"'identity.personal_data_consent.required\x12!personal data consent is required\x1a\fthis == trueR\x13personalDataConsent\x12#\n" +
 	"\rpow_challenge\x18\x03 \x01(\tR\fpowChallenge\x12\x1b\n" +
 	"\tpow_nonce\x18\x04 \x01(\tR\bpowNonce\"\x8b\x02\n" +
 	"\x1eStartPhoneVerificationResponse\x12^\n" +
@@ -861,14 +870,18 @@ const file_webapi_v1_identity_registration_registration_proto_rawDesc = "" +
 	"\x06Status\x12\x16\n" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eSTATUS_STARTED\x10\x01\x12\x1b\n" +
-	"\x17STATUS_CAPTCHA_REQUIRED\x10\x02\"m\n" +
-	"\x1fConfirmPhoneVerificationRequest\x126\n" +
-	"\x17registration_session_id\x18\x01 \x01(\tR\x15registrationSessionId\x12\x12\n" +
-	"\x04code\x18\x02 \x01(\tR\x04code\"\"\n" +
-	" ConfirmPhoneVerificationResponse\"\xaf\x01\n" +
-	"\x1dStartEmailVerificationRequest\x126\n" +
-	"\x17registration_session_id\x18\x01 \x01(\tR\x15registrationSessionId\x12\x14\n" +
-	"\x05email\x18\x02 \x01(\tR\x05email\x12#\n" +
+	"\x17STATUS_CAPTCHA_REQUIRED\x10\x02\"\xb6\x02\n" +
+	"\x1fConfirmPhoneVerificationRequest\x12\xad\x01\n" +
+	"\x17registration_session_id\x18\x01 \x01(\tBu\xbaHr\xba\x01o\n" +
+	")identity.registration_session_id.required\x12)registration_session_id must not be empty\x1a\x17!this.matches('^\\\\s*$')R\x15registrationSessionId\x12c\n" +
+	"\x04code\x18\x02 \x01(\tBO\xbaHL\xba\x01I\n" +
+	"\x16identity.code.required\x12\x16code must not be empty\x1a\x17!this.matches('^\\\\s*$')R\x04code\"\"\n" +
+	" ConfirmPhoneVerificationResponse\"\xfa\x02\n" +
+	"\x1dStartEmailVerificationRequest\x12\xad\x01\n" +
+	"\x17registration_session_id\x18\x01 \x01(\tBu\xbaHr\xba\x01o\n" +
+	")identity.registration_session_id.required\x12)registration_session_id must not be empty\x1a\x17!this.matches('^\\\\s*$')R\x15registrationSessionId\x12g\n" +
+	"\x05email\x18\x02 \x01(\tBQ\xbaHN\xba\x01K\n" +
+	"\x17identity.email.required\x12\x17email must not be empty\x1a\x17!this.matches('^\\\\s*$')R\x05email\x12#\n" +
 	"\rpow_challenge\x18\x03 \x01(\tR\fpowChallenge\x12\x1b\n" +
 	"\tpow_nonce\x18\x04 \x01(\tR\bpowNonce\"\xd3\x01\n" +
 	"\x1eStartEmailVerificationResponse\x12^\n" +
@@ -876,14 +889,18 @@ const file_webapi_v1_identity_registration_registration_proto_rawDesc = "" +
 	"\x06Status\x12\x16\n" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eSTATUS_STARTED\x10\x01\x12\x1b\n" +
-	"\x17STATUS_CAPTCHA_REQUIRED\x10\x02\"m\n" +
-	"\x1fConfirmEmailVerificationRequest\x126\n" +
-	"\x17registration_session_id\x18\x01 \x01(\tR\x15registrationSessionId\x12\x12\n" +
-	"\x04code\x18\x02 \x01(\tR\x04code\"\"\n" +
-	" ConfirmEmailVerificationResponse\"\xe2\x01\n" +
-	"\x1bCompleteRegistrationRequest\x126\n" +
-	"\x17registration_session_id\x18\x01 \x01(\tR\x15registrationSessionId\x12\x12\n" +
-	"\x04salt\x18\x02 \x01(\fR\x04salt\x12\x1a\n" +
+	"\x17STATUS_CAPTCHA_REQUIRED\x10\x02\"\xb6\x02\n" +
+	"\x1fConfirmEmailVerificationRequest\x12\xad\x01\n" +
+	"\x17registration_session_id\x18\x01 \x01(\tBu\xbaHr\xba\x01o\n" +
+	")identity.registration_session_id.required\x12)registration_session_id must not be empty\x1a\x17!this.matches('^\\\\s*$')R\x15registrationSessionId\x12c\n" +
+	"\x04code\x18\x02 \x01(\tBO\xbaHL\xba\x01I\n" +
+	"\x16identity.code.required\x12\x16code must not be empty\x1a\x17!this.matches('^\\\\s*$')R\x04code\"\"\n" +
+	" ConfirmEmailVerificationResponse\"\xa3\x03\n" +
+	"\x1bCompleteRegistrationRequest\x12\xad\x01\n" +
+	"\x17registration_session_id\x18\x01 \x01(\tBu\xbaHr\xba\x01o\n" +
+	")identity.registration_session_id.required\x12)registration_session_id must not be empty\x1a\x17!this.matches('^\\\\s*$')R\x15registrationSessionId\x12[\n" +
+	"\x04salt\x18\x02 \x01(\fBG\xbaHD\xba\x01A\n" +
+	"\x16identity.salt.required\x12\x16salt must not be empty\x1a\x0fthis.size() > 0R\x04salt\x12\x1a\n" +
 	"\bverifier\x18\x03 \x01(\fR\bverifier\x12\x1d\n" +
 	"\n" +
 	"first_name\x18\x04 \x01(\tR\tfirstName\x12\x1b\n" +

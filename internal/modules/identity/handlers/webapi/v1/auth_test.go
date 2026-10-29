@@ -11,6 +11,7 @@ import (
 	"connectrpc.com/connect"
 
 	"dmatech.ru/internal/modules/identity/repository"
+	common "dmatech.ru/internal/pkg/contracts/webapi/v1/common"
 	authv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/auth"
 	"dmatech.ru/internal/pkg/srp"
 )
@@ -100,6 +101,34 @@ func connectCode(t *testing.T, err error) connect.Code {
 	return cerr.Code()
 }
 
+// errorKey достаёт ключ ошибки (common.ErrorPayload.Key, либо, если есть
+// привязанные к полю нарушения, common.FieldError.Key первого из них — см.
+// keyedError/fieldError в auth.go) — общий для всех трёх сервисов формат,
+// см. doc-комментарий ErrorPayload в webapi/v1/common/errors.proto.
+func errorKey(t *testing.T, err error) string {
+	t.Helper()
+	var cerr *connect.Error
+	if !errors.As(err, &cerr) {
+		t.Fatalf("expected a *connect.Error, got %T: %v", err, err)
+	}
+	details := cerr.Details()
+	if len(details) != 1 {
+		t.Fatalf("len(details) = %d, want 1", len(details))
+	}
+	msg, derr := details[0].Value()
+	if derr != nil {
+		t.Fatalf("decode detail: %v", derr)
+	}
+	payload, ok := msg.(*common.ErrorPayload)
+	if !ok {
+		t.Fatalf("detail type = %T, want *common.ErrorPayload", msg)
+	}
+	if fields := payload.GetFields(); len(fields) > 0 {
+		return fields[0].GetKey()
+	}
+	return payload.GetKey()
+}
+
 // Анти-перечисление аккаунтов: несуществующий identifier не должен
 // отличаться от существующего ни кодом ошибки (InitializeSession всегда
 // успешен), ни стабильностью ответа, ни результатом второго шага.
@@ -163,17 +192,6 @@ func TestAuthFlow_UnknownIdentifierAlwaysFailsLikeWrongPassword(t *testing.T) {
 	_, err := loginAs(t, h, "unknown@example.com", "any password at all")
 	if code := connectCode(t, err); code != connect.CodeUnauthenticated {
 		t.Fatalf("code = %v, want CodeUnauthenticated (must look identical to a wrong password on a real account)", code)
-	}
-}
-
-func TestInitializeSession_EmptyIdentifier(t *testing.T) {
-	h := newTestHandler()
-
-	_, err := h.InitializeSession(context.Background(), connect.NewRequest(&authv1.InitializeSessionRequest{
-		Identifier: "   ",
-	}))
-	if code := connectCode(t, err); code != connect.CodeInvalidArgument {
-		t.Fatalf("code = %v, want CodeInvalidArgument", code)
 	}
 }
 
@@ -275,15 +293,7 @@ func TestCompleteAuthentication_SessionIsSingleUse(t *testing.T) {
 	if code := connectCode(t, err); code != connect.CodeNotFound {
 		t.Fatalf("second complete code = %v, want CodeNotFound (session must be single-use)", code)
 	}
-}
-
-func TestCompleteAuthentication_MissingFields(t *testing.T) {
-	h := newTestHandler()
-
-	_, err := h.CompleteAuthentication(context.Background(), connect.NewRequest(&authv1.CompleteAuthenticationRequest{
-		SessionId: "   ",
-	}))
-	if code := connectCode(t, err); code != connect.CodeInvalidArgument {
-		t.Fatalf("code = %v, want CodeInvalidArgument", code)
+	if key := errorKey(t, err); key != "identity.session.not_found" {
+		t.Fatalf("key = %q, want %q", key, "identity.session.not_found")
 	}
 }

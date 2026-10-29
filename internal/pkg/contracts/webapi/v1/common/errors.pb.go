@@ -22,11 +22,28 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// key (ErrorPayload и FieldError) — стабильный, не переведённый
+// идентификатор ошибки (например "identity.identifier.required"), по
+// которому клиент сам подбирает локализованный текст — backend никогда не
+// переводит и не формирует текст ошибки на основе локали запроса (см.
+// internal/pkg/locale про то, для чего локаль всё-таки используется:
+// шаблоны notifications, не ошибки API). message — фиксированный,
+// нелокализуемый текст на одном языке, для логов и отладки, не для показа
+// пользователю: клиент не должен его показывать и не должен на него
+// переключаться, если key неизвестен — неизвестный key тоже нужно обрабатывать
+// (например, обобщённым текстом), а не падать.
+//
+// Для входящей статической валидации (непустые обязательные поля и т.п.)
+// key — это id правила buf.validate (см. internal/pkg/validation и
+// buf.validate.field.cel.id в .proto identity-модуля) — один и тот же key
+// для одного и того же смысла поля во всех RPC, где оно встречается (так
+// клиенту нужен один перевод, не по одному на каждый метод).
 type ErrorPayload struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Code          int32                  `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
 	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
 	Fields        []*FieldError          `protobuf:"bytes,3,rep,name=fields,proto3" json:"fields,omitempty"`
+	Key           string                 `protobuf:"bytes,4,opt,name=key,proto3" json:"key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -82,11 +99,19 @@ func (x *ErrorPayload) GetFields() []*FieldError {
 	return nil
 }
 
+func (x *ErrorPayload) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
 type FieldError struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
 	Params        *structpb.Struct       `protobuf:"bytes,3,opt,name=params,proto3" json:"params,omitempty"`
+	Key           string                 `protobuf:"bytes,4,opt,name=key,proto3" json:"key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -142,20 +167,29 @@ func (x *FieldError) GetParams() *structpb.Struct {
 	return nil
 }
 
+func (x *FieldError) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
 var File_webapi_v1_common_errors_proto protoreflect.FileDescriptor
 
 const file_webapi_v1_common_errors_proto_rawDesc = "" +
 	"\n" +
-	"\x1dwebapi/v1/common/errors.proto\x12\x17webapi.common.errors.v1\x1a\x1cgoogle/protobuf/struct.proto\"y\n" +
+	"\x1dwebapi/v1/common/errors.proto\x12\x17webapi.common.errors.v1\x1a\x1cgoogle/protobuf/struct.proto\"\x8b\x01\n" +
 	"\fErrorPayload\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12;\n" +
-	"\x06fields\x18\x03 \x03(\v2#.webapi.common.errors.v1.FieldErrorR\x06fields\"k\n" +
+	"\x06fields\x18\x03 \x03(\v2#.webapi.common.errors.v1.FieldErrorR\x06fields\x12\x10\n" +
+	"\x03key\x18\x04 \x01(\tR\x03key\"}\n" +
 	"\n" +
 	"FieldError\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12/\n" +
-	"\x06params\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x06paramsB\xe6\x01\n" +
+	"\x06params\x18\x03 \x01(\v2\x17.google.protobuf.StructR\x06params\x12\x10\n" +
+	"\x03key\x18\x04 \x01(\tR\x03keyB\xe6\x01\n" +
 	"\x1bcom.webapi.common.errors.v1B\vErrorsProtoP\x01Z;dmatech.ru/internal/pkg/contracts/webapi/v1/common;errorsv1\xa2\x02\x03WCE\xaa\x02\x17Webapi.Common.Errors.V1\xca\x02\x17Webapi\\Common\\Errors\\V1\xe2\x02#Webapi\\Common\\Errors\\V1\\GPBMetadata\xea\x02\x1aWebapi::Common::Errors::V1b\x06proto3"
 
 var (

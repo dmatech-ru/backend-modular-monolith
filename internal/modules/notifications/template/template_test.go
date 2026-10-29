@@ -7,6 +7,7 @@ import (
 
 	deliveryv1 "dmatech.ru/internal/pkg/contracts/peer/common/v1/delivery"
 	templatesv1 "dmatech.ru/internal/pkg/contracts/peer/common/v1/templates"
+	"dmatech.ru/internal/pkg/locale"
 )
 
 func TestNew_LoadsAllTemplatesWithoutError(t *testing.T) {
@@ -24,6 +25,7 @@ func TestRender_OTPCode_Email_ReturnsSubjectAndEscapedBody(t *testing.T) {
 	subject, body, err := r.Render(
 		templatesv1.TemplateKey_TEMPLATE_KEY_OTP_CODE,
 		deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_EMAIL,
+		locale.Default,
 		map[string]string{"code": "123456"},
 	)
 	if err != nil {
@@ -53,6 +55,7 @@ func TestRender_Email_EscapesHTMLInVariables(t *testing.T) {
 	_, body, err := r.Render(
 		templatesv1.TemplateKey_TEMPLATE_KEY_OTP_CODE,
 		deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_EMAIL,
+		locale.Default,
 		map[string]string{"code": "<script>alert(1)</script>"},
 	)
 	if err != nil {
@@ -72,6 +75,7 @@ func TestRender_OTPCode_SMS_ReturnsPlainTextWithoutSubject(t *testing.T) {
 	subject, body, err := r.Render(
 		templatesv1.TemplateKey_TEMPLATE_KEY_OTP_CODE,
 		deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_SMS,
+		locale.Default,
 		map[string]string{"code": "654321"},
 	)
 	if err != nil {
@@ -97,6 +101,7 @@ func TestRender_PasswordResetCode_Email_ReturnsSubjectAndBody(t *testing.T) {
 	subject, body, err := r.Render(
 		templatesv1.TemplateKey_TEMPLATE_KEY_PASSWORD_RESET_CODE,
 		deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_EMAIL,
+		locale.Default,
 		map[string]string{"code": "111222"},
 	)
 	if err != nil {
@@ -110,13 +115,106 @@ func TestRender_PasswordResetCode_Email_ReturnsSubjectAndBody(t *testing.T) {
 	}
 }
 
+// email.body.tmpl — только блок content; оформление (doctype, <html lang>)
+// приходит из общей email_layout.tmpl (см. doc-комментарий template.go) —
+// проверяем, что рендер и правда идёт через неё, а не просто совпадает по
+// границам content.
+func TestRender_Email_UsesSharedLayout(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	_, body, err := r.Render(
+		templatesv1.TemplateKey_TEMPLATE_KEY_OTP_CODE,
+		deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_EMAIL,
+		"en",
+		map[string]string{"code": "123456"},
+	)
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if !strings.Contains(body, "<!DOCTYPE html>") {
+		t.Fatalf("body = %q, want the shared email_layout.tmpl doctype", body)
+	}
+	if !strings.Contains(body, `lang="en"`) {
+		t.Fatalf("body = %q, want <html lang=\"en\"> from the layout, driven by the requested locale", body)
+	}
+}
+
+// Render должен использовать именно переданную локаль, не всегда Default —
+// иначе локализация шаблонов была бы фикцией.
+func TestRender_UsesRequestedLocale(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	_, ruBody, err := r.Render(
+		templatesv1.TemplateKey_TEMPLATE_KEY_OTP_CODE,
+		deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_SMS,
+		"ru",
+		map[string]string{"code": "777"},
+	)
+	if err != nil {
+		t.Fatalf("Render (ru): %v", err)
+	}
+	_, enBody, err := r.Render(
+		templatesv1.TemplateKey_TEMPLATE_KEY_OTP_CODE,
+		deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_SMS,
+		"en",
+		map[string]string{"code": "777"},
+	)
+	if err != nil {
+		t.Fatalf("Render (en): %v", err)
+	}
+	if ruBody == enBody {
+		t.Fatalf("ru and en bodies must differ, got identical text %q", ruBody)
+	}
+	if !strings.Contains(enBody, "Verification code") {
+		t.Fatalf("en body = %q, want it to contain the English wording", enBody)
+	}
+}
+
+// Локаль без перевода (например, её ещё не завели) не должна ломать
+// отправку — Render тихо подставляет locale.Default (см. doc-комментарий
+// пакета).
+func TestRender_FallsBackToDefaultLocaleWhenUnsupported(t *testing.T) {
+	r, err := New()
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	_, fallbackBody, err := r.Render(
+		templatesv1.TemplateKey_TEMPLATE_KEY_OTP_CODE,
+		deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_SMS,
+		"fr",
+		map[string]string{"code": "777"},
+	)
+	if err != nil {
+		t.Fatalf("Render (fr, unsupported): %v", err)
+	}
+	_, defaultBody, err := r.Render(
+		templatesv1.TemplateKey_TEMPLATE_KEY_OTP_CODE,
+		deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_SMS,
+		locale.Default,
+		map[string]string{"code": "777"},
+	)
+	if err != nil {
+		t.Fatalf("Render (default): %v", err)
+	}
+	if fallbackBody != defaultBody {
+		t.Fatalf("fallback body = %q, want it to match the default-locale body %q", fallbackBody, defaultBody)
+	}
+}
+
 func TestRender_UnknownTemplateKey(t *testing.T) {
 	r, err := New()
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 
-	_, _, err = r.Render(templatesv1.TemplateKey_TEMPLATE_KEY_UNSPECIFIED, deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_EMAIL, nil)
+	_, _, err = r.Render(templatesv1.TemplateKey_TEMPLATE_KEY_UNSPECIFIED, deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_EMAIL, locale.Default, nil)
 	if !errors.Is(err, ErrTemplateNotFound) {
 		t.Fatalf("err = %v, want ErrTemplateNotFound", err)
 	}
@@ -130,7 +228,7 @@ func TestRender_MissingChannelTemplate(t *testing.T) {
 
 	// otp_code не завели для MAX — должна быть явная ошибка, не тихий
 	// пустой результат.
-	_, _, err = r.Render(templatesv1.TemplateKey_TEMPLATE_KEY_OTP_CODE, deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_MAX, map[string]string{"code": "1"})
+	_, _, err = r.Render(templatesv1.TemplateKey_TEMPLATE_KEY_OTP_CODE, deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_MAX, locale.Default, map[string]string{"code": "1"})
 	if !errors.Is(err, ErrTemplateNotFound) {
 		t.Fatalf("err = %v, want ErrTemplateNotFound", err)
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"connectrpc.com/connect"
 	"github.com/nats-io/nats.go"
 
 	peerhandler "dmatech.ru/internal/modules/captcha/handlers/peer/v1"
@@ -17,6 +18,7 @@ import (
 	"dmatech.ru/internal/pkg/natsrpc"
 	"dmatech.ru/internal/pkg/protoset"
 	"dmatech.ru/internal/pkg/service"
+	"dmatech.ru/internal/pkg/validation"
 )
 
 const configPathEnv = "CAPTCHA_CONFIG_PATH"
@@ -43,14 +45,25 @@ func initialization(ctx context.Context) error {
 	}
 	svc := NewService(store, cfg.DefaultDifficulty, cfg.ChallengeTTL)
 
+	validator, err := validation.NewValidator()
+	if err != nil {
+		return fmt.Errorf("captcha: %w", err)
+	}
+	validationOpt := connect.WithInterceptors(validation.Interceptor(validator))
+
 	// Один общий NATS-subject на оба контракта: webapi (видна гейтвею) и
 	// internal (видна только другим модулям по NATS). Различает их путь
 	// запроса ("/webapi.captcha.v1.CaptchaService/..." против
 	// "/peer.captcha.v1.CaptchaService/...") — пакеты разные, коллизий нет.
+	// Локаль (internal/pkg/locale) здесь не подключена — у captcha нет
+	// ничего, что от неё зависело бы (ни шаблонов, ни переводимых для
+	// пользователя бизнес-ошибок: IssueChallenge либо успешен, либо
+	// CodeInternal, VerifyChallenge возвращает valid=false как обычный
+	// ответ, не ошибку).
 	mux := http.NewServeMux()
-	webapiPath, webapiHTTPHandler := webapihandler.NewHandler(svc)
+	webapiPath, webapiHTTPHandler := webapihandler.NewHandler(svc, validationOpt)
 	mux.Handle(webapiPath, webapiHTTPHandler)
-	peerPath, peerHTTPHandler := peerhandler.NewHandler(svc)
+	peerPath, peerHTTPHandler := peerhandler.NewHandler(svc, validationOpt)
 	mux.Handle(peerPath, peerHTTPHandler)
 
 	sub, err := natsrpc.ServeHandler(nc, log, cfg.Env, cfg.ServiceName, cfg.AppVersion, mux)

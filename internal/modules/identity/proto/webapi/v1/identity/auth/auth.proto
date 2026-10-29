@@ -4,6 +4,8 @@ package webapi.identity.auth.v1;
 
 option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity/auth;authv1";
 
+import "buf/validate/validate.proto";
+
 // IdentityAuthService — только SRP-вход для уже существующих аккаунтов.
 // Регистрация — отдельный, многошаговый контракт, см.
 // IdentityRegistrationService в registration.proto (свой пакет, см. там; бывший
@@ -24,7 +26,14 @@ service IdentityAuthService {
 }
 
 message InitializeSessionRequest {
-  string identifier = 1;
+  // identity.identifier.required — общий для identity-модуля ключ (см.
+  // doc-комментарий ErrorPayload в webapi/v1/common/errors.proto): то же
+  // поле с тем же смыслом в CheckIdentifier/InitiateRecovery.
+  string identifier = 1 [(buf.validate.field).cel = {
+    id: "identity.identifier.required"
+    message: "identifier must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
 }
 
 message InitializeSessionResponse {
@@ -37,11 +46,23 @@ message InitializeSessionResponse {
 }
 
 message CompleteAuthenticationRequest {
-  string session_id = 1;
+  string session_id = 1 [(buf.validate.field).cel = {
+    id: "identity.session_id.required"
+    message: "session_id must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
   // client_public — публичное эфемерное значение клиента (A).
-  bytes client_public = 2;
+  bytes client_public = 2 [(buf.validate.field).cel = {
+    id: "identity.client_public.required"
+    message: "client_public must not be empty"
+    expression: "this.size() > 0"
+  }];
   // client_proof — доказательство клиента (M1).
-  bytes client_proof = 3;
+  bytes client_proof = 3 [(buf.validate.field).cel = {
+    id: "identity.client_proof.required"
+    message: "client_proof must not be empty"
+    expression: "this.size() > 0"
+  }];
 }
 
 message CompleteAuthenticationResponse {

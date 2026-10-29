@@ -4,6 +4,8 @@ package peer.captcha.v1;
 
 option go_package = "dmatech.ru/internal/modules/captcha/proto/peer/v1/captcha;captchav1";
 
+import "buf/validate/validate.proto";
+
 // CaptchaService — proof-of-work challenge/verify. Namespace "peer", не
 // "webapi": этот контракт не предназначен для гейтвея и внешних HTTP-
 // клиентов, его вызывают только другие модули по NATS напрямую (как
@@ -60,10 +62,25 @@ message IssueChallengeResponse {
 }
 
 message VerifyChallengeRequest {
-  string challenge = 1;
+  // captcha.challenge.required/captcha.nonce.required — единственный
+  // сегодня вызывающий (identity) уже не зовёт VerifyChallenge с пустыми
+  // challenge/nonce (см. verifyPoW в identity/handlers/webapi/v1/
+  // registration.go — пустые значения трактуются как "PoW ещё не решался",
+  // отдельно от этого RPC), но у контракта может быть другой вызывающий в
+  // будущем — статическая форма не должна зависеть от того, что сегодня
+  // единственный клиент и так аккуратен.
+  string challenge = 1 [(buf.validate.field).cel = {
+    id: "captcha.challenge.required"
+    message: "challenge must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
   // nonce — решение, подобранное клиентом:
   // SHA-256(challenge || nonce) должен иметь echoed_difficulty ведущих нулевых бит.
-  string nonce = 2;
+  string nonce = 2 [(buf.validate.field).cel = {
+    id: "captcha.nonce.required"
+    message: "nonce must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
 }
 
 message VerifyChallengeResponse {

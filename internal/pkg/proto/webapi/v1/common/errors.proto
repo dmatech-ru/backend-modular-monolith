@@ -4,15 +4,32 @@ package webapi.common.errors.v1;
 
 import "google/protobuf/struct.proto";
 
-
+// key (ErrorPayload и FieldError) — стабильный, не переведённый
+// идентификатор ошибки (например "identity.identifier.required"), по
+// которому клиент сам подбирает локализованный текст — backend никогда не
+// переводит и не формирует текст ошибки на основе локали запроса (см.
+// internal/pkg/locale про то, для чего локаль всё-таки используется:
+// шаблоны notifications, не ошибки API). message — фиксированный,
+// нелокализуемый текст на одном языке, для логов и отладки, не для показа
+// пользователю: клиент не должен его показывать и не должен на него
+// переключаться, если key неизвестен — неизвестный key тоже нужно обрабатывать
+// (например, обобщённым текстом), а не падать.
+//
+// Для входящей статической валидации (непустые обязательные поля и т.п.)
+// key — это id правила buf.validate (см. internal/pkg/validation и
+// buf.validate.field.cel.id в .proto identity-модуля) — один и тот же key
+// для одного и того же смысла поля во всех RPC, где оно встречается (так
+// клиенту нужен один перевод, не по одному на каждый метод).
 message ErrorPayload {
-  int32               code    = 1;   
-  string              message = 2;   
-  repeated FieldError fields  = 3;   
+  int32               code    = 1;
+  string              message = 2;
+  repeated FieldError fields  = 3;
+  string              key     = 4;
 }
 
 message FieldError {
-  string                 name    = 1;   
-  string                 message = 2;   
-  google.protobuf.Struct params  = 3;   
+  string                 name    = 1;
+  string                 message = 2;
+  google.protobuf.Struct params  = 3;
+  string                 key     = 4;
 }

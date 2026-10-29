@@ -62,10 +62,10 @@ func (h *AuthHandler) InitializeSession(
 	ctx context.Context,
 	req *connect.Request[authv1.InitializeSessionRequest],
 ) (*connect.Response[authv1.InitializeSessionResponse], error) {
+	// identifier непустой — проверено до вызова этого метода (см.
+	// buf.validate.field.cel на этом поле в auth.proto и validation.Interceptor
+	// в auth.handler.go).
 	identifier := strings.TrimSpace(req.Msg.GetIdentifier())
-	if identifier == "" {
-		return nil, fieldError(connect.CodeInvalidArgument, "identifier", "identifier must not be empty")
-	}
 
 	var userID *string
 	var salt, verifier []byte
@@ -103,19 +103,15 @@ func (h *AuthHandler) CompleteAuthentication(
 	ctx context.Context,
 	req *connect.Request[authv1.CompleteAuthenticationRequest],
 ) (*connect.Response[authv1.CompleteAuthenticationResponse], error) {
+	// session_id/client_public/client_proof непусты — проверено до вызова
+	// этого метода (см. buf.validate.field.cel на этих полях в auth.proto).
 	sessionID := strings.TrimSpace(req.Msg.GetSessionId())
-	if sessionID == "" {
-		return nil, fieldError(connect.CodeInvalidArgument, "session_id", "session_id must not be empty")
-	}
 	clientPublic := req.Msg.GetClientPublic()
 	clientProof := req.Msg.GetClientProof()
-	if len(clientPublic) == 0 || len(clientProof) == 0 {
-		return nil, fieldError(connect.CodeInvalidArgument, "client_public", "client_public and client_proof are required")
-	}
 
 	challenge, err := h.repo.ConsumeChallenge(ctx, sessionID)
 	if errors.Is(err, repository.ErrNotFound) {
-		return nil, connect.NewError(connect.CodeNotFound, errors.New("session not found or expired"))
+		return nil, keyedError(connect.CodeNotFound, "identity.session.not_found", "session not found or expired")
 	}
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -124,7 +120,7 @@ func (h *AuthHandler) CompleteAuthentication(
 	serverProof, err := srp.VerifyClientProof(challenge.Verifier, challenge.ServerSecret, challenge.ServerPublic, clientPublic, clientProof)
 	switch {
 	case errors.Is(err, srp.ErrProofMismatch), errors.Is(err, srp.ErrInvalidPublicValue), errors.Is(err, srp.ErrValueTooLarge):
-		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("invalid credentials"))
+		return nil, keyedError(connect.CodeUnauthenticated, "identity.credentials.invalid", "invalid credentials")
 	case err != nil:
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -133,16 +129,40 @@ func (h *AuthHandler) CompleteAuthentication(
 }
 
 // fieldError формирует connect-ошибку с деталью в виде common.ErrorPayload,
-// чтобы клиент мог получить структурированную причину отказа по конкретному полю.
-func fieldError(code connect.Code, field, message string) error {
+// привязанной к конкретному полю. key — стабильный, не переведённый
+// идентификатор ошибки (см. doc-комментарий ErrorPayload в
+// webapi/v1/common/errors.proto и internal/pkg/validation, откуда идёт тот
+// же формат для статической валидации формы запроса): здесь — для
+// бизнес-правил, которые buf.validate не выражает (например, "канал
+// недоступен для этой сессии"), а не для формы запроса. message —
+// фиксированный, нелокализуемый текст для логов/отладки, клиент его не
+// показывает и переводит key сам.
+func fieldError(code connect.Code, field, key, message string) error {
+	cerr := connect.NewError(code, errors.New(message))
+
+	payload := &common.ErrorPayload{
+		Code: int32(code),
+		Fields: []*common.FieldError{
+			{Name: field, Key: key, Message: message},
+		},
+	}
+	if detail, derr := connect.NewErrorDetail(payload); derr == nil {
+		cerr.AddDetail(detail)
+	}
+	return cerr
+}
+
+// keyedError — то же самое, что fieldError, но для ошибок, не привязанных
+// к конкретному полю (не форма запроса, а состояние системы: "сессия не
+// найдена", "слишком много попыток" и т.п.) — key идёт прямо в
+// ErrorPayload, без FieldError.
+func keyedError(code connect.Code, key, message string) error {
 	cerr := connect.NewError(code, errors.New(message))
 
 	payload := &common.ErrorPayload{
 		Code:    int32(code),
 		Message: message,
-		Fields: []*common.FieldError{
-			{Name: field, Message: message},
-		},
+		Key:     key,
 	}
 	if detail, derr := connect.NewErrorDetail(payload); derr == nil {
 		cerr.AddDetail(detail)

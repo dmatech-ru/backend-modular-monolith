@@ -4,6 +4,8 @@ package webapi.identity.registration.v1;
 
 option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity/registration;registrationv1";
 
+import "buf/validate/validate.proto";
+
 // IdentityRegistrationService — многошаговая регистрация: телефон с согласием
 // на обработку персональных данных → подтверждение телефона кодом из SMS →
 // email → подтверждение email кодом из письма → пароль (SRP, задаётся
@@ -93,7 +95,13 @@ service IdentityRegistrationService {
 }
 
 message CheckIdentifierRequest {
-  string identifier = 1;
+  // identity.identifier.required — см. doc-комментарий ErrorPayload в
+  // webapi/v1/common/errors.proto.
+  string identifier = 1 [(buf.validate.field).cel = {
+    id: "identity.identifier.required"
+    message: "identifier must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
   // pow_challenge/pow_nonce — пусты в первой попытке. Если сервер ответит
   // STATUS_CAPTCHA_REQUIRED, клиент получает challenge отдельным вызовом
   // webapi.captcha.v1.CaptchaService.IssueChallenge, решает его и повторяет
@@ -120,10 +128,18 @@ message CheckIdentifierResponse {
 }
 
 message StartPhoneVerificationRequest {
-  string phone = 1;
+  string phone = 1 [(buf.validate.field).cel = {
+    id: "identity.phone.required"
+    message: "phone must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
   // personal_data_consent — согласие на обработку персональных данных.
   // Обязательно true, иначе INVALID_ARGUMENT.
-  bool personal_data_consent = 2;
+  bool personal_data_consent = 2 [(buf.validate.field).cel = {
+    id: "identity.personal_data_consent.required"
+    message: "personal data consent is required"
+    expression: "this == true"
+  }];
   // pow_challenge/pow_nonce — см. CheckIdentifierRequest; здесь защищают не
   // от перечисления, а от SMS-бомбёжки чужого номера.
   string pow_challenge = 3;
@@ -142,16 +158,32 @@ message StartPhoneVerificationResponse {
 }
 
 message ConfirmPhoneVerificationRequest {
-  string registration_session_id = 1;
+  string registration_session_id = 1 [(buf.validate.field).cel = {
+    id: "identity.registration_session_id.required"
+    message: "registration_session_id must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
   // code — одноразовый код из SMS.
-  string code = 2;
+  string code = 2 [(buf.validate.field).cel = {
+    id: "identity.code.required"
+    message: "code must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
 }
 
 message ConfirmPhoneVerificationResponse {}
 
 message StartEmailVerificationRequest {
-  string registration_session_id = 1;
-  string email = 2;
+  string registration_session_id = 1 [(buf.validate.field).cel = {
+    id: "identity.registration_session_id.required"
+    message: "registration_session_id must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
+  string email = 2 [(buf.validate.field).cel = {
+    id: "identity.email.required"
+    message: "email must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
   // pow_challenge/pow_nonce — см. CheckIdentifierRequest; здесь защищают не
   // от перечисления, а от бомбёжки чужого email.
   string pow_challenge = 3;
@@ -168,17 +200,36 @@ message StartEmailVerificationResponse {
 }
 
 message ConfirmEmailVerificationRequest {
-  string registration_session_id = 1;
+  string registration_session_id = 1 [(buf.validate.field).cel = {
+    id: "identity.registration_session_id.required"
+    message: "registration_session_id must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
   // code — одноразовый код из письма.
-  string code = 2;
+  string code = 2 [(buf.validate.field).cel = {
+    id: "identity.code.required"
+    message: "code must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
 }
 
 message ConfirmEmailVerificationResponse {}
 
 message CompleteRegistrationRequest {
-  string registration_session_id = 1;
+  string registration_session_id = 1 [(buf.validate.field).cel = {
+    id: "identity.registration_session_id.required"
+    message: "registration_session_id must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
   // salt, verifier — см. комментарий у IdentityAuthService.Register в auth.proto.
-  bytes salt = 2;
+  bytes salt = 2 [(buf.validate.field).cel = {
+    id: "identity.salt.required"
+    message: "salt must not be empty"
+    expression: "this.size() > 0"
+  }];
+  // verifier — форма (SRP-правдоподобность, не просто "непусто") проверяется
+  // в Go (srp.ValidVerifier) — см. тот же комментарий у ResetPasswordRequest.
+  // verifier в recovery.proto.
   bytes verifier = 3;
   string first_name = 4;
   string last_name = 5;

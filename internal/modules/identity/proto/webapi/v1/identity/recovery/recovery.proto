@@ -4,6 +4,8 @@ package webapi.identity.recovery.v1;
 
 option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity/recovery;recoveryv1";
 
+import "buf/validate/validate.proto";
+
 // IdentityRecoveryService — восстановление доступа: идентификатор →
 // доступные способы получить код → выбор способа и отправка кода →
 // подтверждение кода → сброс пароля.
@@ -104,9 +106,18 @@ enum DeliveryChannel {
 }
 
 message InitiateRecoveryRequest {
-  string identifier = 1;
+  // identity.identifier.required — тот же ключ, что у
+  // IdentityAuthService.InitializeSession/IdentityRegistrationService.
+  // CheckIdentifier (один смысл поля — один ключ, см. doc-комментарий
+  // ErrorPayload в webapi/v1/common/errors.proto).
+  string identifier = 1 [(buf.validate.field).cel = {
+    id: "identity.identifier.required"
+    message: "identifier must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
   // pow_challenge/pow_nonce — см. комментарий сервиса; пусты в первой
-  // попытке, заполняются после получения STATUS_CAPTCHA_REQUIRED.
+  // попытке, заполняются после получения STATUS_CAPTCHA_REQUIRED. Не
+  // required: пустое значение здесь легитимно (первая попытка), не ошибка.
   string pow_challenge = 2;
   string pow_nonce = 3;
 }
@@ -135,7 +146,14 @@ message InitiateRecoveryResponse {
 }
 
 message SendRecoveryCodeRequest {
-  string recovery_session_id = 1;
+  string recovery_session_id = 1 [(buf.validate.field).cel = {
+    id: "identity.recovery_session_id.required"
+    message: "recovery_session_id must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
+  // channel: доступность конкретного канала для этой сессии — бизнес-правило
+  // (см. SendRecoveryCode в хендлере), не статическая форма, поэтому вне
+  // buf.validate; DELIVERY_CHANNEL_UNSPECIFIED тоже отсекается там же.
   DeliveryChannel channel = 2;
   string pow_challenge = 3;
   string pow_nonce = 4;
@@ -151,17 +169,40 @@ message SendRecoveryCodeResponse {
 }
 
 message ConfirmRecoveryCodeRequest {
-  string recovery_session_id = 1;
-  string code = 2;
+  string recovery_session_id = 1 [(buf.validate.field).cel = {
+    id: "identity.recovery_session_id.required"
+    message: "recovery_session_id must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
+  // identity.code.required — тот же ключ, что у Confirm{Phone,Email}
+  // VerificationRequest.code в registration.proto.
+  string code = 2 [(buf.validate.field).cel = {
+    id: "identity.code.required"
+    message: "code must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
 }
 
 message ConfirmRecoveryCodeResponse {}
 
 message ResetPasswordRequest {
-  string recovery_session_id = 1;
+  string recovery_session_id = 1 [(buf.validate.field).cel = {
+    id: "identity.recovery_session_id.required"
+    message: "recovery_session_id must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
   // salt, verifier — см. комментарий сервиса; как и в
   // IdentityRegistrationService.CompleteRegistration, пароль сюда не попадает.
-  bytes salt = 2;
+  // identity.salt.required — тот же ключ, что у CompleteRegistrationRequest.salt.
+  bytes salt = 2 [(buf.validate.field).cel = {
+    id: "identity.salt.required"
+    message: "salt must not be empty"
+    expression: "this.size() > 0"
+  }];
+  // verifier — форма (не просто "непусто", а правдоподобный элемент группы
+  // SRP) проверяется в Go (srp.ValidVerifier), не здесь: граница размера —
+  // деталь реализации SRP-группы (internal/pkg/srp), а не формы запроса,
+  // дублировать её магическим числом в .proto не стоит.
   bytes verifier = 3;
 }
 
