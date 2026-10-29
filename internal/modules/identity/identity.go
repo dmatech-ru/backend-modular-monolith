@@ -126,9 +126,15 @@ func initialization(ctx context.Context) error {
 	passwordResetFreeze := time.Duration(cfg.PasswordResetFreezeHours) * time.Hour
 	sessions := newSessionManager(repo, tokenIssuer)
 
+	abuse, err := newAttemptTracker(ctx, nc, cfg.PowAdaptiveWindow)
+	if err != nil {
+		return fmt.Errorf("identity: %w", err)
+	}
+
 	sub, err := authhandler.Subscribe(nc, log, cfg.Env, cfg.ServiceName, cfg.AppVersion, validator,
 		repo, antiEnumKey, repo, captcha, phones, emails,
-		repo, recoveryCodes, passwordChangedAlerts, passwordResetFreeze, sessions)
+		repo, recoveryCodes, passwordChangedAlerts, passwordResetFreeze,
+		abuse, cfg.PowAdaptiveThreshold, sessions)
 	if err != nil {
 		return fmt.Errorf("failed to subscribe identity services: %w", err)
 	}

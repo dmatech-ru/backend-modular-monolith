@@ -12,6 +12,7 @@ import (
 
 	"dmatech.ru/internal/modules/identity/repository"
 	"dmatech.ru/internal/pkg/authctx"
+	"dmatech.ru/internal/pkg/clientip"
 	registrationv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/registration"
 	"dmatech.ru/internal/pkg/srp"
 )
@@ -164,6 +165,35 @@ func (f *fakeCaptchaClient) VerifyChallenge(context.Context, string, string) (bo
 	return f.result, f.err
 }
 
+// fakeAbuseTracker — AbuseTracker в памяти для тестов (см. pow.go):
+// обычный счётчик по (scope, key), без NATS. Большинство тестов строит
+// хендлер с powThreshold=0, при котором решение adaptivePoWGate не
+// зависит от накопленного счётчика (PoW остаётся всегда обязательным, то
+// есть не меняет наблюдаемое поведение по сравнению с тем, что было до
+// адаптивного PoW) — отдельные тесты на сам адаптивный механизм задают
+// свой threshold и проверяют счётчик явно.
+type fakeAbuseTracker struct {
+	mu     sync.Mutex
+	counts map[string]int
+}
+
+func newFakeAbuseTracker() *fakeAbuseTracker {
+	return &fakeAbuseTracker{counts: map[string]int{}}
+}
+
+func (f *fakeAbuseTracker) Count(_ context.Context, scope, key string) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.counts[scope+"."+key], nil
+}
+
+func (f *fakeAbuseTracker) RecordAttempt(_ context.Context, scope, key string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.counts[scope+"."+key]++
+	return nil
+}
+
 // fakeSender — PhoneSender/EmailSender, запоминающий отправленные коды.
 type fakeSender struct {
 	mu   sync.Mutex
@@ -189,7 +219,7 @@ func newTestRegistrationHandler(approveCaptcha bool) (*RegistrationHandler, *fak
 	repo := newFakeRegistrationRepository()
 	phones := newFakeSender()
 	emails := newFakeSender()
-	h := NewRegistrationHandler(repo, &fakeCaptchaClient{result: approveCaptcha}, phones, emails, newFakeSessions())
+	h := NewRegistrationHandler(repo, &fakeCaptchaClient{result: approveCaptcha}, phones, emails, newFakeSessions(), newFakeAbuseTracker(), 0)
 	return h, repo, phones, emails
 }
 
@@ -229,6 +259,54 @@ func TestCheckIdentifier_ExistsAndNotFound(t *testing.T) {
 	}
 	if resp.Msg.GetStatus() != registrationv1.CheckIdentifierResponse_STATUS_NOT_FOUND {
 		t.Fatalf("status = %v, want STATUS_NOT_FOUND", resp.Msg.GetStatus())
+	}
+}
+
+// Сквозной тест адаптивного PoW на реальном эндпоинте: первые
+// powThreshold вызовов без решения проходят как обычно, следующий —
+// требует решения. Ключ — clientip.Header (не identifier): CheckIdentifier
+// защищает от перечисления многих identifier'ов одним вызывающим, поэтому
+// счётчик привязан к IP, а не к конкретному identifier (см. doc-комментарий
+// adaptivePoWGate в pow.go).
+func TestCheckIdentifier_AdaptivePoW_FreeAttemptsThenRequiresSolution(t *testing.T) {
+	repo := newFakeRegistrationRepository()
+	captcha := &fakeCaptchaClient{result: false}
+	abuse := newFakeAbuseTracker()
+	h := NewRegistrationHandler(repo, captcha, newFakeSender(), newFakeSender(), newFakeSessions(), abuse, 2)
+
+	req := func() *connect.Request[registrationv1.CheckIdentifierRequest] {
+		r := connect.NewRequest(&registrationv1.CheckIdentifierRequest{Identifier: "alice@example.com"})
+		r.Header().Set(clientip.Header, "203.0.113.5")
+		return r
+	}
+
+	for i := 0; i < 2; i++ {
+		resp, err := h.CheckIdentifier(context.Background(), req())
+		if err != nil {
+			t.Fatalf("attempt %d: %v", i, err)
+		}
+		if resp.Msg.GetStatus() == registrationv1.CheckIdentifierResponse_STATUS_CAPTCHA_REQUIRED {
+			t.Fatalf("attempt %d: got STATUS_CAPTCHA_REQUIRED, want to still be under threshold", i)
+		}
+	}
+
+	resp, err := h.CheckIdentifier(context.Background(), req())
+	if err != nil {
+		t.Fatalf("CheckIdentifier: %v", err)
+	}
+	if resp.Msg.GetStatus() != registrationv1.CheckIdentifierResponse_STATUS_CAPTCHA_REQUIRED {
+		t.Fatalf("status = %v, want STATUS_CAPTCHA_REQUIRED after reaching the threshold", resp.Msg.GetStatus())
+	}
+
+	// Другой IP не делит счётчик — проходит свободно.
+	other := connect.NewRequest(&registrationv1.CheckIdentifierRequest{Identifier: "alice@example.com"})
+	other.Header().Set(clientip.Header, "198.51.100.9")
+	resp, err = h.CheckIdentifier(context.Background(), other)
+	if err != nil {
+		t.Fatalf("CheckIdentifier (other IP): %v", err)
+	}
+	if resp.Msg.GetStatus() == registrationv1.CheckIdentifierResponse_STATUS_CAPTCHA_REQUIRED {
+		t.Fatal("a different client IP must not inherit another caller's attempt count")
 	}
 }
 

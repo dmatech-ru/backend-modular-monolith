@@ -1,5 +1,7 @@
 package identity
 
+import "time"
+
 type configuration struct {
 	ServiceName string `yaml:"serviceName" env:"IDENTITY_SERVICE_NAME" env-required:"true"`
 	LogLevel    string `yaml:"logLevel" env:"IDENTITY_LOG_LEVEL" env-default:"info"`
@@ -39,6 +41,17 @@ type configuration struct {
 	// обычного префикса IDENTITY_: значение должно быть побайтово
 	// одинаковым в конфиге identity и в конфиге gateway.
 	AuthJWTSecret string `yaml:"authJwtSecret" env:"AUTH_JWT_SECRET" env-required:"true"`
+
+	// PowAdaptiveThreshold/PowAdaptiveWindow — адаптивный PoW: сколько
+	// непройденных/неверных попыток на ключ (IP вызывающего для
+	// CheckIdentifier/InitiateRecovery, телефон/email адресата для
+	// Start*Verification/SendRecoveryCode, см. handlers/webapi/v1/pow.go и
+	// abuse.go) допускается, прежде чем решение PoW станет обязательным, и
+	// за какое окно эти попытки считаются. Единичный легитимный
+	// пользователь укладывается в Threshold и не замечает PoW вовсе — см.
+	// doc-комментарий сервиса в registration.proto.
+	PowAdaptiveThreshold int           `yaml:"powAdaptiveThreshold" env:"IDENTITY_POW_ADAPTIVE_THRESHOLD" env-default:"3"`
+	PowAdaptiveWindow    time.Duration `yaml:"powAdaptiveWindow" env:"IDENTITY_POW_ADAPTIVE_WINDOW" env-default:"1h"`
 }
 
 // seedsConfig — настройки SQL-сидов схемы identity, применяются только

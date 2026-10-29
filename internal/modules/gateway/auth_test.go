@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 
 	"dmatech.ru/internal/pkg/authctx"
+	"dmatech.ru/internal/pkg/clientip"
 	optionsv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/options"
 	"dmatech.ru/internal/pkg/natsdiscovery"
 	"dmatech.ru/internal/pkg/natsrpc"
@@ -197,5 +198,48 @@ func TestHandleProxy_StripsClientSuppliedTrustedHeadersOnPublicMethod(t *testing
 	}
 	if sawHeader {
 		t.Fatalf("forwarded %s = %q, want it stripped (client must not be able to set it directly)", authctx.HeaderUserID, gotUserID)
+	}
+}
+
+// clientip.Header — та же логика, но выставляется для КАЖДОГО запроса,
+// публичного или нет (см. doc-комментарий handleProxy): адаптивный PoW
+// (internal/modules/identity/handlers/webapi/v1/pow.go) нужен методам
+// вроде CheckIdentifier, у которых по определению не может быть
+// access-токена.
+func TestHandleProxy_ForwardsRealClientIPAndStripsClientSupplied(t *testing.T) {
+	nc := connectTestNATS(t)
+
+	s, routes := testServerWithVerifier(HttpConfig{BaseUrl: "/api", ProxyRequestTimeout: time.Second}, nc, nil)
+	routes.Apply(natsdiscovery.RouteUpdate{
+		ServiceName: "identity", Version: "1_0_0",
+		Descriptor: descriptorWithMethods(t, "pkg", "Svc", map[string]bool{"Public": true}),
+	})
+
+	const methodPath = "/pkg.Svc/Public"
+	subject := natsrpc.RPCSubject(testEnv, "identity", "1_0_0", methodPath)
+
+	var gotClientIP string
+	sub, err := nc.Subscribe(subject, func(msg *nats.Msg) {
+		gotClientIP = msg.Header.Get(clientip.Header)
+		reply := nats.NewMsg(msg.Reply)
+		reply.Header.Set(natsrpc.RPCStatusHeader, "200")
+		_ = msg.RespondMsg(reply)
+	})
+	if err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	defer sub.Unsubscribe()
+
+	req := httptest.NewRequest(http.MethodPost, "/api"+methodPath, nil)
+	req.Header.Set(clientip.Header, "attacker-forged-ip")
+	req.RemoteAddr = "203.0.113.5:12345"
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200, body=%q", rec.Code, rec.Body.String())
+	}
+	if gotClientIP != "203.0.113.5" {
+		t.Fatalf("forwarded client IP = %q, want real remote addr 203.0.113.5 (client-supplied header must be stripped)", gotClientIP)
 	}
 }

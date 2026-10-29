@@ -12,6 +12,7 @@ import (
 	"connectrpc.com/connect"
 
 	"dmatech.ru/internal/modules/identity/repository"
+	"dmatech.ru/internal/pkg/clientip"
 	deliveryv1 "dmatech.ru/internal/pkg/contracts/peer/common/v1/delivery"
 	recoveryv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/recovery"
 	"dmatech.ru/internal/pkg/contracts/webapi/v1/identity/recovery/recoveryv1connect"
@@ -77,6 +78,12 @@ type RecoveryHandler struct {
 	sessions SessionRevoker
 	alerts   PasswordChangedNotifier
 	log      *slog.Logger
+	// abuse/powThreshold — адаптивный PoW (см. adaptivePoWGate в pow.go):
+	// InitiateRecovery ключуется по IP вызывающего (как CheckIdentifier —
+	// защищает от перечисления по многим identifier'ам), SendRecoveryCode —
+	// по адресату (защищает от бомбёжки одного номера/почты кодами).
+	abuse        AbuseTracker
+	powThreshold int
 	// passwordResetFreeze — см. ResetPasswordResponse.frozen_until в
 	// recovery.proto: период после смены пароля, задуманный как окно, в
 	// течение которого чувствительные операции должны быть недоступны
@@ -85,23 +92,14 @@ type RecoveryHandler struct {
 }
 
 // NewRecoveryHandler создаёт обработчик IdentityRecoveryService.
-func NewRecoveryHandler(repo RecoveryRepository, captcha CaptchaClient, codes RecoveryCodeSender, sessions SessionRevoker, alerts PasswordChangedNotifier, log *slog.Logger, passwordResetFreeze time.Duration) *RecoveryHandler {
-	return &RecoveryHandler{repo: repo, captcha: captcha, codes: codes, sessions: sessions, alerts: alerts, log: log, passwordResetFreeze: passwordResetFreeze}
+func NewRecoveryHandler(repo RecoveryRepository, captcha CaptchaClient, codes RecoveryCodeSender, sessions SessionRevoker, alerts PasswordChangedNotifier, log *slog.Logger, abuse AbuseTracker, powThreshold int, passwordResetFreeze time.Duration) *RecoveryHandler {
+	return &RecoveryHandler{repo: repo, captcha: captcha, codes: codes, sessions: sessions, alerts: alerts, log: log, abuse: abuse, powThreshold: powThreshold, passwordResetFreeze: passwordResetFreeze}
 }
 
 // NewRecoveryServiceHandler собирает HTTP-обработчик IdentityRecoveryService
 // для монтирования в веб-сервер.
-func NewRecoveryServiceHandler(repo RecoveryRepository, captcha CaptchaClient, codes RecoveryCodeSender, sessions SessionRevoker, alerts PasswordChangedNotifier, log *slog.Logger, passwordResetFreeze time.Duration, opts ...connect.HandlerOption) (string, http.Handler) {
-	return recoveryv1connect.NewIdentityRecoveryServiceHandler(NewRecoveryHandler(repo, captcha, codes, sessions, alerts, log, passwordResetFreeze), opts...)
-}
-
-// verifyPoW — см. комментарий у RegistrationHandler.verifyPoW; тот же приём,
-// отдельный метод, потому что captcha — поле этого, другого, хендлера.
-func (h *RecoveryHandler) verifyPoW(ctx context.Context, challenge, nonce string) (bool, error) {
-	if challenge == "" || nonce == "" {
-		return false, nil
-	}
-	return h.captcha.VerifyChallenge(ctx, challenge, nonce)
+func NewRecoveryServiceHandler(repo RecoveryRepository, captcha CaptchaClient, codes RecoveryCodeSender, sessions SessionRevoker, alerts PasswordChangedNotifier, log *slog.Logger, abuse AbuseTracker, powThreshold int, passwordResetFreeze time.Duration, opts ...connect.HandlerOption) (string, http.Handler) {
+	return recoveryv1connect.NewIdentityRecoveryServiceHandler(NewRecoveryHandler(repo, captcha, codes, sessions, alerts, log, abuse, powThreshold, passwordResetFreeze), opts...)
 }
 
 // recoveryMethod — канал плюс то, с какого поля RecoveryAccount берётся
@@ -219,7 +217,9 @@ func (h *RecoveryHandler) InitiateRecovery(
 	// buf.validate.field.cel на этом поле в recovery.proto).
 	identifier := strings.TrimSpace(req.Msg.GetIdentifier())
 
-	ok, err := h.verifyPoW(ctx, req.Msg.GetPowChallenge(), req.Msg.GetPowNonce())
+	ok, err := adaptivePoWGate(ctx, h.captcha, h.abuse, h.powThreshold,
+		abuseScopeInitiateRecovery, req.Header().Get(clientip.Header),
+		req.Msg.GetPowChallenge(), req.Msg.GetPowNonce())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -274,16 +274,6 @@ func (h *RecoveryHandler) SendRecoveryCode(
 	// buf.validate.field.cel на этом поле в recovery.proto).
 	sessionID := strings.TrimSpace(req.Msg.GetRecoverySessionId())
 
-	ok, err := h.verifyPoW(ctx, req.Msg.GetPowChallenge(), req.Msg.GetPowNonce())
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	if !ok {
-		return connect.NewResponse(&recoveryv1.SendRecoveryCodeResponse{
-			Status: recoveryv1.SendRecoveryCodeResponse_STATUS_CAPTCHA_REQUIRED,
-		}), nil
-	}
-
 	session, err := h.repo.GetRecoverySession(ctx, sessionID)
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
@@ -292,13 +282,29 @@ func (h *RecoveryHandler) SendRecoveryCode(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	destination, ok := recoveryDestination(session.RecoveryAccount, req.Msg.GetChannel())
-	if !ok {
+	destination, destOK := recoveryDestination(session.RecoveryAccount, req.Msg.GetChannel())
+	if !destOK {
 		return nil, fieldError(connect.CodeInvalidArgument, "channel", "identity.recovery_channel.unavailable", "channel is not available for this recovery session")
 	}
-	peerChannel, ok := toPeerChannel(req.Msg.GetChannel())
-	if !ok {
+	peerChannel, chOK := toPeerChannel(req.Msg.GetChannel())
+	if !chOK {
 		return nil, fieldError(connect.CodeInvalidArgument, "channel", "identity.channel.unknown", "unknown channel")
+	}
+
+	// Ключ — сам адресат (destination), не session_id и не IP: это защита
+	// от бомбёжки одного номера/почты повторными вызовами с тем же
+	// session_id, а не от перечисления session_id (они криптослучайны,
+	// см. identity.recovery_sessions, перебор бессмыслен независимо от PoW).
+	ok, err := adaptivePoWGate(ctx, h.captcha, h.abuse, h.powThreshold,
+		abuseScopeSendRecoveryCode, destination,
+		req.Msg.GetPowChallenge(), req.Msg.GetPowNonce())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	if !ok {
+		return connect.NewResponse(&recoveryv1.SendRecoveryCodeResponse{
+			Status: recoveryv1.SendRecoveryCodeResponse_STATUS_CAPTCHA_REQUIRED,
+		}), nil
 	}
 
 	code, err := generateOTP()

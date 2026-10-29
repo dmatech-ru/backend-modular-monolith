@@ -13,6 +13,7 @@ import (
 	"connectrpc.com/connect"
 
 	"dmatech.ru/internal/modules/identity/repository"
+	"dmatech.ru/internal/pkg/clientip"
 	registrationv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/registration"
 	"dmatech.ru/internal/pkg/contracts/webapi/v1/identity/registration/registrationv1connect"
 	"dmatech.ru/internal/pkg/srp"
@@ -60,27 +61,26 @@ type RegistrationHandler struct {
 	phones   PhoneSender
 	emails   EmailSender
 	sessions SessionIssuer
+	// abuse/powThreshold — адаптивный PoW (см. adaptivePoWGate в pow.go):
+	// CheckIdentifier ключуется по IP вызывающего (см. clientip), т.к.
+	// защищает от перечисления — переходов между МНОГИМИ identifier'ами;
+	// StartPhoneVerification/StartEmailVerification — по адресату
+	// (телефон/email), т.к. защищают от бомбёжки ОДНОГО номера/почты, не
+	// зависящей от IP атакующего (см. doc-комментарий сервиса в
+	// registration.proto).
+	abuse        AbuseTracker
+	powThreshold int
 }
 
 // NewRegistrationHandler создаёт обработчик IdentityRegistrationService.
-func NewRegistrationHandler(repo RegistrationRepository, captcha CaptchaClient, phones PhoneSender, emails EmailSender, sessions SessionIssuer) *RegistrationHandler {
-	return &RegistrationHandler{repo: repo, captcha: captcha, phones: phones, emails: emails, sessions: sessions}
+func NewRegistrationHandler(repo RegistrationRepository, captcha CaptchaClient, phones PhoneSender, emails EmailSender, sessions SessionIssuer, abuse AbuseTracker, powThreshold int) *RegistrationHandler {
+	return &RegistrationHandler{repo: repo, captcha: captcha, phones: phones, emails: emails, sessions: sessions, abuse: abuse, powThreshold: powThreshold}
 }
 
 // NewRegistrationServiceHandler собирает HTTP-обработчик
 // IdentityRegistrationService для монтирования в веб-сервер.
-func NewRegistrationServiceHandler(repo RegistrationRepository, captcha CaptchaClient, phones PhoneSender, emails EmailSender, sessions SessionIssuer, opts ...connect.HandlerOption) (string, http.Handler) {
-	return registrationv1connect.NewIdentityRegistrationServiceHandler(NewRegistrationHandler(repo, captcha, phones, emails, sessions), opts...)
-}
-
-// verifyPoW — true, только если challenge/nonce присланы и проверка у
-// captcha-модуля прошла. Пустые challenge/nonce — это "капча ещё не
-// решалась", а не ошибка вызова, поэтому не обращаемся к captcha впустую.
-func (h *RegistrationHandler) verifyPoW(ctx context.Context, challenge, nonce string) (bool, error) {
-	if challenge == "" || nonce == "" {
-		return false, nil
-	}
-	return h.captcha.VerifyChallenge(ctx, challenge, nonce)
+func NewRegistrationServiceHandler(repo RegistrationRepository, captcha CaptchaClient, phones PhoneSender, emails EmailSender, sessions SessionIssuer, abuse AbuseTracker, powThreshold int, opts ...connect.HandlerOption) (string, http.Handler) {
+	return registrationv1connect.NewIdentityRegistrationServiceHandler(NewRegistrationHandler(repo, captcha, phones, emails, sessions, abuse, powThreshold), opts...)
 }
 
 // CheckIdentifier проверяет существование аккаунта. См. doc-комментарий
@@ -93,7 +93,9 @@ func (h *RegistrationHandler) CheckIdentifier(
 	// buf.validate.field.cel на этом поле в registration.proto).
 	identifier := strings.TrimSpace(req.Msg.GetIdentifier())
 
-	ok, err := h.verifyPoW(ctx, req.Msg.GetPowChallenge(), req.Msg.GetPowNonce())
+	ok, err := adaptivePoWGate(ctx, h.captcha, h.abuse, h.powThreshold,
+		abuseScopeCheckIdentifier, req.Header().Get(clientip.Header),
+		req.Msg.GetPowChallenge(), req.Msg.GetPowNonce())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -128,7 +130,9 @@ func (h *RegistrationHandler) StartPhoneVerification(
 	// registration.proto).
 	phone := strings.TrimSpace(req.Msg.GetPhone())
 
-	ok, err := h.verifyPoW(ctx, req.Msg.GetPowChallenge(), req.Msg.GetPowNonce())
+	ok, err := adaptivePoWGate(ctx, h.captcha, h.abuse, h.powThreshold,
+		abuseScopeStartPhoneVerification, phone,
+		req.Msg.GetPowChallenge(), req.Msg.GetPowNonce())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -191,7 +195,12 @@ func (h *RegistrationHandler) StartEmailVerification(
 	sessionID := strings.TrimSpace(req.Msg.GetRegistrationSessionId())
 	email := strings.TrimSpace(req.Msg.GetEmail())
 
-	ok, err := h.verifyPoW(ctx, req.Msg.GetPowChallenge(), req.Msg.GetPowNonce())
+	// Ключ — lower(email), как EmailExists сравнивает email регистронезависимо
+	// (см. repository.go): Alice@example.com и alice@EXAMPLE.com не должны
+	// считаться двумя разными адресатами бомбёжки.
+	ok, err := adaptivePoWGate(ctx, h.captcha, h.abuse, h.powThreshold,
+		abuseScopeStartEmailVerification, strings.ToLower(email),
+		req.Msg.GetPowChallenge(), req.Msg.GetPowNonce())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

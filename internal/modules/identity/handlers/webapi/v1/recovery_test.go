@@ -177,7 +177,7 @@ func newTestRecoveryHandler(approveCaptcha bool) (*RecoveryHandler, *fakeRecover
 	sessions := newFakeSessions()
 	alerts := &fakePasswordChangedNotifier{}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	h := NewRecoveryHandler(repo, &fakeCaptchaClient{result: approveCaptcha}, codes, sessions, alerts, log, testPasswordResetFreeze)
+	h := NewRecoveryHandler(repo, &fakeCaptchaClient{result: approveCaptcha}, codes, sessions, alerts, log, newFakeAbuseTracker(), 0, testPasswordResetFreeze)
 	return h, repo, codes, sessions, alerts
 }
 

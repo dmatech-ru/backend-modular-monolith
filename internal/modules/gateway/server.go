@@ -16,6 +16,7 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"dmatech.ru/internal/pkg/authctx"
+	"dmatech.ru/internal/pkg/clientip"
 	"dmatech.ru/internal/pkg/httpserver"
 	"dmatech.ru/internal/pkg/natsrpc"
 )
@@ -123,12 +124,21 @@ func (s *server) handleProxy(w http.ResponseWriter, r *http.Request) {
 	r.Header.Del(authctx.HeaderUserID)
 	r.Header.Del(authctx.HeaderPermissions)
 	r.Header.Del(authctx.HeaderSessionID)
+	// clientip.Header — та же логика, но не об identity, а о сетевом
+	// адресе: выставляется для КАЖДОГО запроса, публичного или нет (в
+	// отличие от трёх заголовков выше), — методам вроде CheckIdentifier,
+	// у которых по определению не может быть access-токена, он тоже нужен
+	// (адаптивный PoW, см. internal/modules/identity/handlers/webapi/v1/pow.go).
+	r.Header.Del(clientip.Header)
+	clientIP := extractClientIP(r, s.cfg.TrustProxyHeaders)
+	r.Header.Set(clientip.Header, clientIP)
+
 	if !rt.PublicMethods[methodPath] && !s.authenticate(r) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	switch s.guard.Before(extractClientIP(r, s.cfg.TrustProxyHeaders), methodPath) {
+	switch s.guard.Before(clientIP, methodPath) {
 	case guardRateLimited:
 		http.Error(w, "rate limit exceeded for this method", http.StatusTooManyRequests)
 		return
