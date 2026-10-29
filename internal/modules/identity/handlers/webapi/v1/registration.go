@@ -45,11 +45,24 @@ type CaptchaClient interface {
 // реализация в этом репозитории — dev-заглушка, которая пишет код в лог
 // (см. identity.go, logSender): реальная интеграция со СМС-гейтвеем/почтовым
 // сервисом не входит в эту итерацию — см. README "Известные ограничения".
+//
+// Оба интерфейса имеют идентичную сигнатуру SendCode(ctx, string, string) —
+// без маркер-методов IsPhoneSender/IsEmailSender любая реализация одного
+// автоматически удовлетворяла бы и другому: конструктор при монтировании
+// (identity.go) или будущая правка Subscribe могли бы поменять местами
+// phones/emails, и это молча скомпилировалось бы и работало бы (SMS-код
+// уходил бы в "емейловый" канал и наоборот). Методы экспортированы (а не
+// isPhoneSender/isEmailSender), потому что реализации живут в другом
+// пакете (identity, см. notifications_client.go) — неэкспортированный
+// метод интерфейса может реализовать только тип из того же пакета, где
+// объявлен интерфейс.
 type PhoneSender interface {
 	SendCode(ctx context.Context, phone, code string) error
+	IsPhoneSender()
 }
 type EmailSender interface {
 	SendCode(ctx context.Context, email, code string) error
+	IsEmailSender()
 }
 
 // RegistrationHandler реализует registrationv1connect.IdentityRegistrationServiceHandler.

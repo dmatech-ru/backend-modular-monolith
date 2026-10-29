@@ -215,6 +215,13 @@ func (f *fakeSender) codeFor(target string) string {
 	return f.sent[target]
 }
 
+// IsPhoneSender/IsEmailSender — fakeSender стоит в тестах за обоими
+// интерфейсами сразу (см. newTestRegistrationHandler), в отличие от
+// продовых otpPhoneSender/otpEmailSender, каждый из которых реализует
+// только свою сторону (см. doc-комментарий PhoneSender/EmailSender).
+func (f *fakeSender) IsPhoneSender() {}
+func (f *fakeSender) IsEmailSender() {}
+
 func newTestRegistrationHandler(approveCaptcha bool) (*RegistrationHandler, *fakeRegistrationRepository, *fakeSender, *fakeSender) {
 	repo := newFakeRegistrationRepository()
 	phones := newFakeSender()

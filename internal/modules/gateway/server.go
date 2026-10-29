@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
@@ -217,13 +216,7 @@ func (s *server) authenticate(r *http.Request) bool {
 }
 
 func writeProxyResponse(w http.ResponseWriter, reply *nats.Msg) {
-	status := http.StatusOK
-	if v := reply.Header.Get(natsrpc.RPCStatusHeader); v != "" {
-		if code, err := strconv.Atoi(v); err == nil {
-			status = code
-		}
-		reply.Header.Del(natsrpc.RPCStatusHeader)
-	}
+	status := natsrpc.StatusFromReply(reply)
 
 	for name, values := range reply.Header {
 		for _, v := range values {

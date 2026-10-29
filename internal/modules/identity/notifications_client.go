@@ -54,6 +54,11 @@ func (s *otpPhoneSender) SendCode(ctx context.Context, phone, code string) error
 	return err
 }
 
+// IsPhoneSender — см. doc-комментарий authhandler.PhoneSender про то, зачем
+// этот метод существует без тела: только чтобы *otpPhoneSender не
+// удовлетворял authhandler.EmailSender по чистой случайности совпадения сигнатур.
+func (s *otpPhoneSender) IsPhoneSender() {}
+
 type otpEmailSender struct {
 	client notificationsv1connect.NotificationServiceClient
 }
@@ -67,6 +72,8 @@ func (s *otpEmailSender) SendCode(ctx context.Context, email, code string) error
 	}))
 	return err
 }
+
+func (s *otpEmailSender) IsEmailSender() {}
 
 var (
 	_ authhandler.PhoneSender = (*otpPhoneSender)(nil)

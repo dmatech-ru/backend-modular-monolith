@@ -85,6 +85,25 @@ func respond(log *slog.Logger, msg *nats.Msg, status int, header http.Header, bo
 	}
 }
 
+// StatusFromReply — обратная операция к respond: достаёт HTTP-статус,
+// который respond положил в RPCStatusHeader, и удаляет этот заголовок из
+// msg.Header, чтобы он не попал дальше как обычный HTTP-заголовок ответа.
+// Общая для natsrpc.Client.Do и gateway.writeProxyResponse — оба декодируют
+// один и тот же ответ ServeHandler, достаточно владеть этой логикой там же,
+// где respond её кодирует, а не дублировать decode в каждом вызывающем
+// пакете. Отсутствующий или нечитаемый заголовок — 200, тот же случай,
+// что respond кодирует как обычный успешный статус.
+func StatusFromReply(msg *nats.Msg) int {
+	status := http.StatusOK
+	if v := msg.Header.Get(RPCStatusHeader); v != "" {
+		if code, err := strconv.Atoi(v); err == nil {
+			status = code
+		}
+		msg.Header.Del(RPCStatusHeader)
+	}
+	return status
+}
+
 // rpcResponseWriter — минимальная реализация http.ResponseWriter, достаточная
 // для прогона connect-go хендлера без реального сетевого соединения.
 type rpcResponseWriter struct {

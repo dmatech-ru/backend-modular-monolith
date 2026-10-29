@@ -67,13 +67,7 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf("natsrpc: request %s: %w", subject, err)
 	}
 
-	status := http.StatusOK
-	if v := reply.Header.Get(RPCStatusHeader); v != "" {
-		if code, err := strconv.Atoi(v); err == nil {
-			status = code
-		}
-		reply.Header.Del(RPCStatusHeader)
-	}
+	status := StatusFromReply(reply)
 
 	return &http.Response{
 		StatusCode: status,
