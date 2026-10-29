@@ -16,6 +16,7 @@ import (
 	deliveryv1 "dmatech.ru/internal/pkg/contracts/peer/common/v1/delivery"
 
 	"dmatech.ru/internal/pkg/config"
+	"dmatech.ru/internal/pkg/httpserver"
 	"dmatech.ru/internal/pkg/locale"
 	"dmatech.ru/internal/pkg/logger"
 	"dmatech.ru/internal/pkg/mq"
@@ -63,7 +64,12 @@ func initialization(ctx context.Context) error {
 		return fmt.Errorf("notifications: %w", err)
 	}
 
-	senders := buildSenders(cfg, log)
+	telegramResolver, err := setupTelegramWebhook(ctx, nc, cfg, log)
+	if err != nil {
+		return fmt.Errorf("notifications: %w", err)
+	}
+
+	senders := buildSenders(cfg, log, telegramResolver)
 	svc := NewService(js, cfg.Env, renderer, senders, log)
 
 	// Нет discovery/webapi-регистрации: у notifications нет webapi-файла
@@ -106,7 +112,10 @@ func initialization(ctx context.Context) error {
 // провайдер сконфигурирован (непустой Host/BotToken); иначе, как SMS/MAX
 // всегда, — logSender. Так локальная разработка без настоящих SMTP/Telegram
 // credentials не ломается, но и не притворяется, что отправка настоящая.
-func buildSenders(cfg *configuration, log *slog.Logger) map[deliveryv1.DeliveryChannel]sender.Sender {
+// telegramResolver — nil, если вебхук (см. setupTelegramWebhook) не поднят:
+// sender.NewTelegramSender сам подставит unresolvedChatResolver, Send
+// останется готовым к реальной отправке, но предсказуемо не резолвящимся.
+func buildSenders(cfg *configuration, log *slog.Logger, telegramResolver sender.ChatResolver) map[deliveryv1.DeliveryChannel]sender.Sender {
 	senders := make(map[deliveryv1.DeliveryChannel]sender.Sender, len(allChannels))
 	for _, channel := range allChannels {
 		senders[channel] = sender.NewLogSender(log, channelToken(channel))
@@ -119,10 +128,50 @@ func buildSenders(cfg *configuration, log *slog.Logger) map[deliveryv1.DeliveryC
 	}
 
 	if cfg.Telegram.BotToken != "" {
-		senders[deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_TELEGRAM] = sender.NewTelegramSender(cfg.Telegram, nil)
+		senders[deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_TELEGRAM] = sender.NewTelegramSender(cfg.Telegram, telegramResolver)
 	} else {
 		log.Warn("Telegram Bot API не настроен (telegram.botToken пуст) — сообщения только логируются")
 	}
 
 	return senders
+}
+
+// setupTelegramWebhook поднимает вебхук, резолвящий телефон → chat_id (см.
+// doc-комментарий TelegramWebhookConfig), если он сконфигурирован, и
+// возвращает резолвер для buildSenders — nil, если вебхук не поднят (ни
+// ошибки, ни паники: TelegramSender с nil-резолвером просто не резолвит
+// ничего, как и раньше).
+//
+// Webhook.Addr пуст — вебхук выключен вовсе (например, локальная разработка
+// без публичного HTTPS-адреса, на который Telegram мог бы постучаться) —
+// это не ошибка конфигурации, а осознанный выбор "Telegram-доставка не
+// нужна/пока не готова". Addr задан без SecretToken — это ошибка: вебхук
+// был бы открыт для кого угодно, кто узнает его URL.
+func setupTelegramWebhook(ctx context.Context, nc *nats.Conn, cfg *configuration, log *slog.Logger) (sender.ChatResolver, error) {
+	if cfg.TelegramWebhook.Addr == "" {
+		return nil, nil
+	}
+	if cfg.TelegramWebhook.SecretToken == "" {
+		return nil, fmt.Errorf("telegramWebhook.secretToken is required when telegramWebhook.addr is set")
+	}
+
+	store, err := newTelegramChatStore(ctx, nc)
+	if err != nil {
+		return nil, err
+	}
+
+	mux := newTelegramWebhookMux(store, cfg.Telegram.BotToken, cfg.TelegramWebhook.SecretToken, cfg.TelegramWebhook.Path, log)
+	srv := httpserver.New(httpserver.Config{Addr: cfg.TelegramWebhook.Addr}, log, mux)
+	if err := srv.Start(); err != nil {
+		return nil, fmt.Errorf("start telegram webhook server: %w", err)
+	}
+	service.OnShutdown(srv.Shutdown)
+
+	if cfg.TelegramWebhook.PublicURL != "" {
+		registerTelegramWebhook(ctx, cfg.Telegram.BotToken, cfg.TelegramWebhook.PublicURL, cfg.TelegramWebhook.SecretToken, log)
+	} else {
+		log.Warn("telegramWebhook.publicUrl не задан — вебхук поднят, но Telegram о нём не уведомлён (вызовите setWebhook вручную или задайте publicUrl)")
+	}
+
+	return store, nil
 }

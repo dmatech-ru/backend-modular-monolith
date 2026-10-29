@@ -69,7 +69,7 @@ func TestAllChannels_HaveDistinctTokens(t *testing.T) {
 
 func TestBuildSenders_UsesLogSenderWhenProvidersNotConfigured(t *testing.T) {
 	cfg := &configuration{}
-	senders := buildSenders(cfg, discardLogger())
+	senders := buildSenders(cfg, discardLogger(), nil)
 
 	for _, ch := range allChannels {
 		if _, ok := senders[ch].(*sender.LogSender); !ok {
@@ -83,7 +83,7 @@ func TestBuildSenders_UsesRealSendersWhenConfigured(t *testing.T) {
 		Email:    sender.EmailConfig{Host: "smtp.example.com"},
 		Telegram: sender.TelegramConfig{BotToken: "test-token"},
 	}
-	senders := buildSenders(cfg, discardLogger())
+	senders := buildSenders(cfg, discardLogger(), nil)
 
 	if _, ok := senders[deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_EMAIL].(*sender.EmailSender); !ok {
 		t.Fatalf("email: got %T, want *sender.EmailSender", senders[deliveryv1.DeliveryChannel_DELIVERY_CHANNEL_EMAIL])

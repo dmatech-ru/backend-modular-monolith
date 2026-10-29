@@ -11,15 +11,17 @@ import (
 )
 
 // ErrChatNotResolved — для destination (номера телефона) ещё нет известного
-// chat_id. Резолвинг телефон → chat_id происходит через штатный механизм
+// chat_id: пользователь либо вообще не писал боту, либо не поделился
+// контактом. Резолвинг телефон → chat_id происходит через штатный механизм
 // Telegram-бота ("поделиться контактом", см. doc-комментарий
-// peer.notifications.v1.NotificationService в notifications.proto) — то
-// есть через вебхук, который получает обновления от Telegram. Этот вебхук
-// в данной итерации не реализован (нужен отдельный HTTP-эндпоинт,
-// зарегистрированный в Telegram Bot API, и хранилище номер→chat_id) —
-// поэтому ChatResolver здесь намеренно пустой: Send полностью готов к
-// реальной отправке, но реально сработает только после того, как
-// появится то, что заполняет резолвер.
+// peer.notifications.v1.NotificationService в notifications.proto) — вебхук
+// (internal/modules/notifications/telegram_webhook.go) принимает обновления
+// от Telegram и пишет привязки в KV (telegram_chats.go), который и
+// реализует ChatResolver. unresolvedChatResolver (ниже) — не единственная
+// реализация, а запасной вариант: если вебхук в конфиге не поднят
+// (TelegramWebhook.Addr пуст), Send остаётся полностью готовым к реальной
+// отправке, но предсказуемо отвечает ErrChatNotResolved для любого номера,
+// а не паникует на nil-резолвере.
 var ErrChatNotResolved = errors.New("sender: no telegram chat is known for this destination yet")
 
 // TelegramConfig — настройки Telegram Bot API. Если BotToken пуст,

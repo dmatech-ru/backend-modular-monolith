@@ -17,3 +17,12 @@ maxDeliver: 5
 #   from: "notifications@example.com"
 # telegram:
 #   botToken: "..."
+
+# telegramWebhook.addr не задан — вебхук, резолвящий телефон -> chat_id,
+# не поднимается вовсе: Telegram-доставка остаётся нерезолвящейся, даже
+# если telegram.botToken заполнен (сообщения уходят с ошибкой
+# "chat not found" для любого номера). Чтобы включить:
+# telegramWebhook:
+#   addr: ":8081"
+#   publicUrl: "https://notifications.example.com/telegram/webhook"
+#   secretToken: "..."
