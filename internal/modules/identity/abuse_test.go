@@ -10,17 +10,48 @@ import (
 	"github.com/nats-io/nuid"
 )
 
-func TestSanitizeAbuseKey(t *testing.T) {
+func TestSanitizeAbuseScope(t *testing.T) {
 	cases := map[string]string{
-		"203.0.113.5":        "203_0_113_5",
-		"alice@example.com":  "alice_example_com",
-		"+79990001234":       "_79990001234",
-		"already_safe-key42": "already_safe-key42",
+		"check_identifier":         "check_identifier",
+		"start_phone_verification": "start_phone_verification",
+		"already_safe-key42":       "already_safe-key42",
 	}
 	for in, want := range cases {
-		if got := sanitizeAbuseKey(in); got != want {
-			t.Fatalf("sanitizeAbuseKey(%q) = %q, want %q", in, got, want)
+		if got := sanitizeAbuseScope(in); got != want {
+			t.Fatalf("sanitizeAbuseScope(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// hashAbuseKey не должен схлопывать разные реальные адреса в один бакет —
+// именно это делала прежняя лоссовая regex-санитизация (".", "@" оба
+// превращались в "_"), позволяя специально подобранным email/телефоном
+// заранее сжечь "бесплатные" попытки чужого адреса (см. doc-комментарий
+// hashAbuseKey в abuse.go).
+func TestHashAbuseKey_DifferentInputsNeverCollide(t *testing.T) {
+	cases := []string{
+		"a.b@example.com",
+		"a@b.example.com",
+		"+79990001234",
+		"+7999000-1234",
+		"203.0.113.5",
+		"203_0_113_5",
+	}
+	seen := map[string]string{}
+	for _, in := range cases {
+		got := hashAbuseKey(in)
+		if prev, ok := seen[got]; ok {
+			t.Fatalf("hashAbuseKey(%q) = hashAbuseKey(%q) = %q, want distinct hashes", in, prev, got)
+		}
+		seen[got] = in
+	}
+}
+
+// Один и тот же вход должен всегда давать один и тот же хеш — иначе
+// Count/RecordAttempt никогда бы не совпадали по ключу.
+func TestHashAbuseKey_Deterministic(t *testing.T) {
+	if hashAbuseKey("alice@example.com") != hashAbuseKey("alice@example.com") {
+		t.Fatal("hashAbuseKey is not deterministic")
 	}
 }
 

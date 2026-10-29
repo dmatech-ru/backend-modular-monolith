@@ -60,6 +60,24 @@ func TestSessionHandler_Refresh_ReusedToken(t *testing.T) {
 	}
 }
 
+// Блокировка аккаунта должна останавливать не только новый вход, но и
+// ротацию уже выданного refresh-токена — иначе Refresh продолжал бы
+// выпускать новые access-токены бесконечно (см. doc-комментарий
+// RotateSession в identity/repository/session.go).
+func TestSessionHandler_Refresh_AccountNotActive(t *testing.T) {
+	sessions := newFakeSessions()
+	sessions.rotateErr = repository.ErrAccountNotActive
+	h := NewSessionHandler(sessions)
+
+	_, err := h.Refresh(context.Background(), requestWithRefreshCookie(&sessionv1.RefreshRequest{}, "some-refresh-token"))
+	if code := connectCode(t, err); code != connect.CodeFailedPrecondition {
+		t.Fatalf("code = %v, want CodeFailedPrecondition", code)
+	}
+	if key := errorKey(t, err); key != "identity.account.not_active" {
+		t.Fatalf("key = %q, want %q", key, "identity.account.not_active")
+	}
+}
+
 func TestSessionHandler_Refresh_SuccessSetsCookies(t *testing.T) {
 	h := NewSessionHandler(newFakeSessions())
 

@@ -71,6 +71,14 @@ func (r *Repository) CreateSession(ctx context.Context, userID string, refreshTo
 // звать IdentityAuthService.InitializeSession заново). Сессия найдена, но
 // уже погашена более ранней ротацией — ErrSessionReused: эта ветка гасит
 // ВСЕ сессии пользователя, а не только найденную, в той же транзакции.
+//
+// Статус пользователя проверяется здесь же (JOIN на identity.users, в той
+// же блокировке FOR UPDATE), а не только в CompleteAuthentication: без
+// этого блокировка аккаунта останавливала бы только новые входы, а уже
+// выданный refresh-токен продолжал бы бессрочно выпускать новые
+// access-токены через Refresh. ErrAccountNotActive не трогает саму строку
+// сессии (в отличие от ErrSessionReused) — это не признак компрометации,
+// а обычная проверка прав, симметричная той, что в CompleteAuthentication.
 func (r *Repository) RotateSession(ctx context.Context, oldRefreshTokenHash, newRefreshTokenHash []byte, userAgent string) (newSessionID, userID string, err error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -78,14 +86,16 @@ func (r *Repository) RotateSession(ctx context.Context, oldRefreshTokenHash, new
 	}
 	defer func() { _ = tx.Rollback(context.Background()) }()
 
-	var sessionID string
+	var sessionID, status string
 	var revokedAt *time.Time
 	var expiresAt time.Time
 	err = tx.QueryRow(ctx,
-		`SELECT id::text, user_id::text, revoked_at, expires_at
-		 FROM identity.sessions WHERE refresh_token_hash = $1 FOR UPDATE`,
+		`SELECT s.id::text, s.user_id::text, s.revoked_at, s.expires_at, u.status
+		 FROM identity.sessions s
+		 JOIN identity.users u ON u.id = s.user_id
+		 WHERE s.refresh_token_hash = $1 FOR UPDATE OF s`,
 		oldRefreshTokenHash,
-	).Scan(&sessionID, &userID, &revokedAt, &expiresAt)
+	).Scan(&sessionID, &userID, &revokedAt, &expiresAt, &status)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "", ErrNotFound
 	}
@@ -107,6 +117,9 @@ func (r *Repository) RotateSession(ctx context.Context, oldRefreshTokenHash, new
 	}
 	if time.Now().After(expiresAt) {
 		return "", "", ErrNotFound
+	}
+	if status != UserStatusActive {
+		return "", "", ErrAccountNotActive
 	}
 
 	if _, err := tx.Exec(ctx,

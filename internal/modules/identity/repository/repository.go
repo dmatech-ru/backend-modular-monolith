@@ -20,6 +20,11 @@ var (
 	ErrNotFound = errors.New("repository: not found")
 	// ErrAlreadyExists — email/телефон уже зарегистрирован.
 	ErrAlreadyExists = errors.New("repository: already exists")
+	// ErrAccountNotActive — учётная запись найдена, но её identity.users.status
+	// не UserStatusActive (см. RotateSession): блокировка аккаунта должна
+	// остановить не только новые входы (CompleteAuthentication), но и
+	// бесконечную ротацию уже выданного refresh-токена.
+	ErrAccountNotActive = errors.New("repository: account is not active")
 )
 
 // Значения identity.users.status (CHECK-constraint, см. миграцию 0001) —

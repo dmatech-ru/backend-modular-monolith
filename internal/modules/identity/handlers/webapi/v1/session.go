@@ -72,6 +72,8 @@ func (h *SessionHandler) Refresh(
 		return nil, keyedError(connect.CodeUnauthenticated, "identity.refresh_token.invalid", "refresh token is invalid or expired")
 	case errors.Is(err, repository.ErrSessionReused):
 		return nil, keyedError(connect.CodeUnauthenticated, "identity.refresh_token.reused", "refresh token has already been used")
+	case errors.Is(err, repository.ErrAccountNotActive):
+		return nil, keyedError(connect.CodeFailedPrecondition, "identity.account.not_active", "account is not active")
 	case err != nil:
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
