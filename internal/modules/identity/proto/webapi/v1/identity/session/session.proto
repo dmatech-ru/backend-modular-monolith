@@ -4,6 +4,7 @@ package webapi.identity.session.v1;
 
 option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity/session;sessionv1";
 
+import "buf/validate/validate.proto";
 import "webapi/v1/options/options.proto";
 
 // IdentitySessionService — обновление и завершение сессии, начатой
@@ -37,6 +38,21 @@ service IdentitySessionService {
   rpc Logout (LogoutRequest) returns (LogoutResponse) {
     option (webapi.options.v1.public) = true;
   }
+
+  // ListSessions перечисляет активные сессии текущего пользователя — не
+  // public (в отличие от Refresh/Logout выше): личность вызывающего
+  // приходит из access-токена, который гейтвей уже проверил (см.
+  // internal/pkg/authctx), а не из refresh-куки. Самообслуживание "где я
+  // залогинен" — без необходимости гасить всё разом, как
+  // IdentityRecoveryService.ResetPassword.
+  rpc ListSessions (ListSessionsRequest) returns (ListSessionsResponse);
+
+  // RevokeSession гасит ровно одну сессию текущего пользователя по её id —
+  // "выйти с этого устройства", не со всех. session_id, принадлежащий
+  // другому пользователю или не существующий вовсе, — NOT_FOUND в обоих
+  // случаях: отличать их незачем, перечислить чужие id пользователь и так
+  // не может (ListSessions отдаёт только его собственные).
+  rpc RevokeSession (RevokeSessionRequest) returns (RevokeSessionResponse);
 }
 
 message RefreshRequest {}
@@ -46,3 +62,37 @@ message RefreshResponse {}
 message LogoutRequest {}
 
 message LogoutResponse {}
+
+message ListSessionsRequest {}
+
+// SessionInfo — одна сессия для самообслуживания: ровно то, что безопасно
+// показать владельцу (без refresh-токена и его хеша).
+message SessionInfo {
+  string session_id = 1;
+  // user_agent — тот, что был на Refresh/CompleteAuthentication/
+  // CompleteRegistration, выпустивших эту сессию (см. identity.sessions в
+  // миграции) — единственная подсказка клиенту, какое это устройство/
+  // браузер, раз IP не хранится.
+  string user_agent = 2;
+  int64 created_at = 3;
+  int64 expires_at = 4;
+  // current — true для сессии, чей refresh-токен породил access-токен,
+  // которым вызван этот метод (jti, см. authctx.Claims.SessionID) — чтобы
+  // клиент мог пометить "это устройство" и не предлагать его отозвать
+  // через RevokeSession (для выхода из текущей сессии есть Logout).
+  bool current = 5;
+}
+
+message ListSessionsResponse {
+  repeated SessionInfo sessions = 1;
+}
+
+message RevokeSessionRequest {
+  string session_id = 1 [(buf.validate.field).cel = {
+    id: "identity.session_id.required"
+    message: "session_id must not be empty"
+    expression: "!this.matches('^\\\\s*$')"
+  }];
+}
+
+message RevokeSessionResponse {}

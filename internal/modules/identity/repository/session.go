@@ -166,6 +166,74 @@ func (r *Repository) RevokeAllSessions(ctx context.Context, userID string) error
 	return nil
 }
 
+// SessionSummary — одна сессия для самообслуживания (ListSessions): ровно
+// то, что безопасно показать владельцу — без refresh_token_hash.
+type SessionSummary struct {
+	ID        string
+	UserAgent string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
+// ListSessions возвращает активные (не погашенные, не просроченные) сессии
+// пользователя — IdentitySessionService.ListSessions: "где я залогинен",
+// без необходимости гасить всё сразу, как RevokeAllSessions. Погашенные
+// строки не включаются: они сами уйдут при следующей попутной чистке (см.
+// doc-комментарий CreateSession) и пользователю смотреть на них незачем.
+func (r *Repository) ListSessions(ctx context.Context, userID string) ([]SessionSummary, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id::text, user_agent, created_at, expires_at
+		 FROM identity.sessions
+		 WHERE user_id = $1::uuid AND revoked_at IS NULL AND expires_at > now()
+		 ORDER BY created_at DESC`,
+		userID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list sessions: %w", err)
+	}
+	defer rows.Close()
+
+	var sessions []SessionSummary
+	for rows.Next() {
+		var s SessionSummary
+		if err := rows.Scan(&s.ID, &s.UserAgent, &s.CreatedAt, &s.ExpiresAt); err != nil {
+			return nil, fmt.Errorf("list sessions: scan: %w", err)
+		}
+		sessions = append(sessions, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list sessions: %w", err)
+	}
+	return sessions, nil
+}
+
+// RevokeSessionByID гасит ровно одну сессию пользователя по её id —
+// IdentitySessionService.RevokeSession ("выйти с этого устройства"), в
+// отличие от RevokeAllSessions (сброс пароля, гасит всё). userID в условии
+// — не просто фильтр результата, а граница доступа: без него пользователь
+// мог бы погасить чужую сессию, зная (или подобрав) её id — в отличие от
+// refresh-токена, который Revoke проверяет по хешу, id сессии не секрет
+// (его же отдаёт ListSessions), и это единственное, что мешает его
+// подобрать для чужого аккаунта. Несуществующий id и чужой id дают одну и
+// ту же ErrNotFound — отличать их незачем.
+func (r *Repository) RevokeSessionByID(ctx context.Context, userID, sessionID string) error {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE identity.sessions SET revoked_at = now()
+		 WHERE id = $1::uuid AND user_id = $2::uuid AND revoked_at IS NULL`,
+		sessionID, userID,
+	)
+	if isInvalidUUID(err) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("revoke session by id: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // GetPermissions возвращает identity.users.permissions (битсет в base64,
 // см. doc-комментарий у этой колонки в миграции 0001) — нужен при выпуске
 // access-токена (см. internal/pkg/authctx.Claims.Permissions).

@@ -118,14 +118,33 @@ var testAntiEnumKey = []byte("test-anti-enumeration-key-32-bytes!")
 type fakeSessions struct {
 	mu             sync.Mutex
 	nextID         int
-	revoked        map[string]bool // userID -> RevokeAllSessions вызывался
-	revokedRefresh []string        // refresh-токены, с которыми звали Revoke
+	revoked        map[string]bool               // userID -> RevokeAllSessions вызывался
+	revokedRefresh []string                      // refresh-токены, с которыми звали Revoke
+	sessions       map[string]*fakeSessionRecord // id -> сессия, для ListSessions/RevokeSessionByID
 	rotateErr      error
 	revokeErr      error
 }
 
+// fakeSessionRecord — состояние identity.sessions в памяти, нужное только
+// ListSessions/RevokeSessionByID (Issue/Rotate/Revoke/RevokeAllSessions
+// этой картой не пользуются — они проверялись раньше без неё).
+type fakeSessionRecord struct {
+	userID, userAgent    string
+	createdAt, expiresAt time.Time
+	revoked              bool
+}
+
 func newFakeSessions() *fakeSessions {
-	return &fakeSessions{revoked: map[string]bool{}}
+	return &fakeSessions{revoked: map[string]bool{}, sessions: map[string]*fakeSessionRecord{}}
+}
+
+// seedSession заводит сессию прямо в фейковом хранилище — для тестов
+// ListSessions/RevokeSession, которым нужна уже существующая сессия, но
+// не интересует сам вход (см. seedUser).
+func (f *fakeSessions) seedSession(id, userID, userAgent string, createdAt, expiresAt time.Time) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sessions[id] = &fakeSessionRecord{userID: userID, userAgent: userAgent, createdAt: createdAt, expiresAt: expiresAt}
 }
 
 func (f *fakeSessions) IssueSession(_ context.Context, userID, _ string) (access, refresh, permissions string, accessExpiresAt time.Time, err error) {
@@ -159,6 +178,29 @@ func (f *fakeSessions) RevokeAllSessions(_ context.Context, userID string) error
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.revoked[userID] = true
+	return nil
+}
+
+func (f *fakeSessions) ListSessions(_ context.Context, userID string) ([]repository.SessionSummary, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []repository.SessionSummary
+	for id, s := range f.sessions {
+		if s.userID == userID && !s.revoked {
+			out = append(out, repository.SessionSummary{ID: id, UserAgent: s.userAgent, CreatedAt: s.createdAt, ExpiresAt: s.expiresAt})
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeSessions) RevokeSessionByID(_ context.Context, userID, sessionID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	s, ok := f.sessions[sessionID]
+	if !ok || s.userID != userID || s.revoked {
+		return repository.ErrNotFound
+	}
+	s.revoked = true
 	return nil
 }
 

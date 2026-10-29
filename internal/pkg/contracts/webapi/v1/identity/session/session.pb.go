@@ -7,6 +7,7 @@
 package sessionv1
 
 import (
+	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	_ "dmatech.ru/internal/pkg/contracts/webapi/v1/options"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -166,18 +167,284 @@ func (*LogoutResponse) Descriptor() ([]byte, []int) {
 	return file_webapi_v1_identity_session_session_proto_rawDescGZIP(), []int{3}
 }
 
+type ListSessionsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSessionsRequest) Reset() {
+	*x = ListSessionsRequest{}
+	mi := &file_webapi_v1_identity_session_session_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSessionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSessionsRequest) ProtoMessage() {}
+
+func (x *ListSessionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_webapi_v1_identity_session_session_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSessionsRequest.ProtoReflect.Descriptor instead.
+func (*ListSessionsRequest) Descriptor() ([]byte, []int) {
+	return file_webapi_v1_identity_session_session_proto_rawDescGZIP(), []int{4}
+}
+
+// SessionInfo — одна сессия для самообслуживания: ровно то, что безопасно
+// показать владельцу (без refresh-токена и его хеша).
+type SessionInfo struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	SessionId string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	// user_agent — тот, что был на Refresh/CompleteAuthentication/
+	// CompleteRegistration, выпустивших эту сессию (см. identity.sessions в
+	// миграции) — единственная подсказка клиенту, какое это устройство/
+	// браузер, раз IP не хранится.
+	UserAgent string `protobuf:"bytes,2,opt,name=user_agent,json=userAgent,proto3" json:"user_agent,omitempty"`
+	CreatedAt int64  `protobuf:"varint,3,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	ExpiresAt int64  `protobuf:"varint,4,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	// current — true для сессии, чей refresh-токен породил access-токен,
+	// которым вызван этот метод (jti, см. authctx.Claims.SessionID) — чтобы
+	// клиент мог пометить "это устройство" и не предлагать его отозвать
+	// через RevokeSession (для выхода из текущей сессии есть Logout).
+	Current       bool `protobuf:"varint,5,opt,name=current,proto3" json:"current,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionInfo) Reset() {
+	*x = SessionInfo{}
+	mi := &file_webapi_v1_identity_session_session_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionInfo) ProtoMessage() {}
+
+func (x *SessionInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_webapi_v1_identity_session_session_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionInfo.ProtoReflect.Descriptor instead.
+func (*SessionInfo) Descriptor() ([]byte, []int) {
+	return file_webapi_v1_identity_session_session_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SessionInfo) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *SessionInfo) GetUserAgent() string {
+	if x != nil {
+		return x.UserAgent
+	}
+	return ""
+}
+
+func (x *SessionInfo) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *SessionInfo) GetExpiresAt() int64 {
+	if x != nil {
+		return x.ExpiresAt
+	}
+	return 0
+}
+
+func (x *SessionInfo) GetCurrent() bool {
+	if x != nil {
+		return x.Current
+	}
+	return false
+}
+
+type ListSessionsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sessions      []*SessionInfo         `protobuf:"bytes,1,rep,name=sessions,proto3" json:"sessions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSessionsResponse) Reset() {
+	*x = ListSessionsResponse{}
+	mi := &file_webapi_v1_identity_session_session_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSessionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSessionsResponse) ProtoMessage() {}
+
+func (x *ListSessionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_webapi_v1_identity_session_session_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSessionsResponse.ProtoReflect.Descriptor instead.
+func (*ListSessionsResponse) Descriptor() ([]byte, []int) {
+	return file_webapi_v1_identity_session_session_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ListSessionsResponse) GetSessions() []*SessionInfo {
+	if x != nil {
+		return x.Sessions
+	}
+	return nil
+}
+
+type RevokeSessionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeSessionRequest) Reset() {
+	*x = RevokeSessionRequest{}
+	mi := &file_webapi_v1_identity_session_session_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeSessionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeSessionRequest) ProtoMessage() {}
+
+func (x *RevokeSessionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_webapi_v1_identity_session_session_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeSessionRequest.ProtoReflect.Descriptor instead.
+func (*RevokeSessionRequest) Descriptor() ([]byte, []int) {
+	return file_webapi_v1_identity_session_session_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *RevokeSessionRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+type RevokeSessionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeSessionResponse) Reset() {
+	*x = RevokeSessionResponse{}
+	mi := &file_webapi_v1_identity_session_session_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeSessionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeSessionResponse) ProtoMessage() {}
+
+func (x *RevokeSessionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_webapi_v1_identity_session_session_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeSessionResponse.ProtoReflect.Descriptor instead.
+func (*RevokeSessionResponse) Descriptor() ([]byte, []int) {
+	return file_webapi_v1_identity_session_session_proto_rawDescGZIP(), []int{8}
+}
+
 var File_webapi_v1_identity_session_session_proto protoreflect.FileDescriptor
 
 const file_webapi_v1_identity_session_session_proto_rawDesc = "" +
 	"\n" +
-	"(webapi/v1/identity/session/session.proto\x12\x1awebapi.identity.session.v1\x1a\x1fwebapi/v1/options/options.proto\"\x10\n" +
+	"(webapi/v1/identity/session/session.proto\x12\x1awebapi.identity.session.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fwebapi/v1/options/options.proto\"\x10\n" +
 	"\x0eRefreshRequest\"\x11\n" +
 	"\x0fRefreshResponse\"\x0f\n" +
 	"\rLogoutRequest\"\x10\n" +
-	"\x0eLogoutResponse2\xe9\x01\n" +
+	"\x0eLogoutResponse\"\x15\n" +
+	"\x13ListSessionsRequest\"\xa3\x01\n" +
+	"\vSessionInfo\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1d\n" +
+	"\n" +
+	"user_agent\x18\x02 \x01(\tR\tuserAgent\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x03 \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"expires_at\x18\x04 \x01(\x03R\texpiresAt\x12\x18\n" +
+	"\acurrent\x18\x05 \x01(\bR\acurrent\"[\n" +
+	"\x14ListSessionsResponse\x12C\n" +
+	"\bsessions\x18\x01 \x03(\v2'.webapi.identity.session.v1.SessionInfoR\bsessions\"\x92\x01\n" +
+	"\x14RevokeSessionRequest\x12z\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tB[\xbaHX\xba\x01U\n" +
+	"\x1cidentity.session_id.required\x12\x1csession_id must not be empty\x1a\x17!this.matches('^\\\\s*$')R\tsessionId\"\x17\n" +
+	"\x15RevokeSessionResponse2\xd2\x03\n" +
 	"\x16IdentitySessionService\x12h\n" +
 	"\aRefresh\x12*.webapi.identity.session.v1.RefreshRequest\x1a+.webapi.identity.session.v1.RefreshResponse\"\x04\x80\xb5\x18\x01\x12e\n" +
-	"\x06Logout\x12).webapi.identity.session.v1.LogoutRequest\x1a*.webapi.identity.session.v1.LogoutResponse\"\x04\x80\xb5\x18\x01B\x81\x02\n" +
+	"\x06Logout\x12).webapi.identity.session.v1.LogoutRequest\x1a*.webapi.identity.session.v1.LogoutResponse\"\x04\x80\xb5\x18\x01\x12q\n" +
+	"\fListSessions\x12/.webapi.identity.session.v1.ListSessionsRequest\x1a0.webapi.identity.session.v1.ListSessionsResponse\x12t\n" +
+	"\rRevokeSession\x120.webapi.identity.session.v1.RevokeSessionRequest\x1a1.webapi.identity.session.v1.RevokeSessionResponseB\x81\x02\n" +
 	"\x1ecom.webapi.identity.session.v1B\fSessionProtoP\x01ZFdmatech.ru/internal/pkg/contracts/webapi/v1/identity/session;sessionv1\xa2\x02\x03WIS\xaa\x02\x1aWebapi.Identity.Session.V1\xca\x02\x1aWebapi\\Identity\\Session\\V1\xe2\x02&Webapi\\Identity\\Session\\V1\\GPBMetadata\xea\x02\x1dWebapi::Identity::Session::V1b\x06proto3"
 
 var (
@@ -192,23 +459,33 @@ func file_webapi_v1_identity_session_session_proto_rawDescGZIP() []byte {
 	return file_webapi_v1_identity_session_session_proto_rawDescData
 }
 
-var file_webapi_v1_identity_session_session_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_webapi_v1_identity_session_session_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_webapi_v1_identity_session_session_proto_goTypes = []any{
-	(*RefreshRequest)(nil),  // 0: webapi.identity.session.v1.RefreshRequest
-	(*RefreshResponse)(nil), // 1: webapi.identity.session.v1.RefreshResponse
-	(*LogoutRequest)(nil),   // 2: webapi.identity.session.v1.LogoutRequest
-	(*LogoutResponse)(nil),  // 3: webapi.identity.session.v1.LogoutResponse
+	(*RefreshRequest)(nil),        // 0: webapi.identity.session.v1.RefreshRequest
+	(*RefreshResponse)(nil),       // 1: webapi.identity.session.v1.RefreshResponse
+	(*LogoutRequest)(nil),         // 2: webapi.identity.session.v1.LogoutRequest
+	(*LogoutResponse)(nil),        // 3: webapi.identity.session.v1.LogoutResponse
+	(*ListSessionsRequest)(nil),   // 4: webapi.identity.session.v1.ListSessionsRequest
+	(*SessionInfo)(nil),           // 5: webapi.identity.session.v1.SessionInfo
+	(*ListSessionsResponse)(nil),  // 6: webapi.identity.session.v1.ListSessionsResponse
+	(*RevokeSessionRequest)(nil),  // 7: webapi.identity.session.v1.RevokeSessionRequest
+	(*RevokeSessionResponse)(nil), // 8: webapi.identity.session.v1.RevokeSessionResponse
 }
 var file_webapi_v1_identity_session_session_proto_depIdxs = []int32{
-	0, // 0: webapi.identity.session.v1.IdentitySessionService.Refresh:input_type -> webapi.identity.session.v1.RefreshRequest
-	2, // 1: webapi.identity.session.v1.IdentitySessionService.Logout:input_type -> webapi.identity.session.v1.LogoutRequest
-	1, // 2: webapi.identity.session.v1.IdentitySessionService.Refresh:output_type -> webapi.identity.session.v1.RefreshResponse
-	3, // 3: webapi.identity.session.v1.IdentitySessionService.Logout:output_type -> webapi.identity.session.v1.LogoutResponse
-	2, // [2:4] is the sub-list for method output_type
-	0, // [0:2] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	5, // 0: webapi.identity.session.v1.ListSessionsResponse.sessions:type_name -> webapi.identity.session.v1.SessionInfo
+	0, // 1: webapi.identity.session.v1.IdentitySessionService.Refresh:input_type -> webapi.identity.session.v1.RefreshRequest
+	2, // 2: webapi.identity.session.v1.IdentitySessionService.Logout:input_type -> webapi.identity.session.v1.LogoutRequest
+	4, // 3: webapi.identity.session.v1.IdentitySessionService.ListSessions:input_type -> webapi.identity.session.v1.ListSessionsRequest
+	7, // 4: webapi.identity.session.v1.IdentitySessionService.RevokeSession:input_type -> webapi.identity.session.v1.RevokeSessionRequest
+	1, // 5: webapi.identity.session.v1.IdentitySessionService.Refresh:output_type -> webapi.identity.session.v1.RefreshResponse
+	3, // 6: webapi.identity.session.v1.IdentitySessionService.Logout:output_type -> webapi.identity.session.v1.LogoutResponse
+	6, // 7: webapi.identity.session.v1.IdentitySessionService.ListSessions:output_type -> webapi.identity.session.v1.ListSessionsResponse
+	8, // 8: webapi.identity.session.v1.IdentitySessionService.RevokeSession:output_type -> webapi.identity.session.v1.RevokeSessionResponse
+	5, // [5:9] is the sub-list for method output_type
+	1, // [1:5] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_webapi_v1_identity_session_session_proto_init() }
@@ -222,7 +499,7 @@ func file_webapi_v1_identity_session_session_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_webapi_v1_identity_session_session_proto_rawDesc), len(file_webapi_v1_identity_session_session_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

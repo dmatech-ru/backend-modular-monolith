@@ -39,6 +39,12 @@ const (
 	// IdentitySessionServiceLogoutProcedure is the fully-qualified name of the IdentitySessionService's
 	// Logout RPC.
 	IdentitySessionServiceLogoutProcedure = "/webapi.identity.session.v1.IdentitySessionService/Logout"
+	// IdentitySessionServiceListSessionsProcedure is the fully-qualified name of the
+	// IdentitySessionService's ListSessions RPC.
+	IdentitySessionServiceListSessionsProcedure = "/webapi.identity.session.v1.IdentitySessionService/ListSessions"
+	// IdentitySessionServiceRevokeSessionProcedure is the fully-qualified name of the
+	// IdentitySessionService's RevokeSession RPC.
+	IdentitySessionServiceRevokeSessionProcedure = "/webapi.identity.session.v1.IdentitySessionService/RevokeSession"
 )
 
 // IdentitySessionServiceClient is a client for the
@@ -57,6 +63,19 @@ type IdentitySessionServiceClient interface {
 	// или уже недействительный refresh-токен не считается ошибкой — результат
 	// (разлогинен) тот же самый.
 	Logout(context.Context, *connect.Request[session.LogoutRequest]) (*connect.Response[session.LogoutResponse], error)
+	// ListSessions перечисляет активные сессии текущего пользователя — не
+	// public (в отличие от Refresh/Logout выше): личность вызывающего
+	// приходит из access-токена, который гейтвей уже проверил (см.
+	// internal/pkg/authctx), а не из refresh-куки. Самообслуживание "где я
+	// залогинен" — без необходимости гасить всё разом, как
+	// IdentityRecoveryService.ResetPassword.
+	ListSessions(context.Context, *connect.Request[session.ListSessionsRequest]) (*connect.Response[session.ListSessionsResponse], error)
+	// RevokeSession гасит ровно одну сессию текущего пользователя по её id —
+	// "выйти с этого устройства", не со всех. session_id, принадлежащий
+	// другому пользователю или не существующий вовсе, — NOT_FOUND в обоих
+	// случаях: отличать их незачем, перечислить чужие id пользователь и так
+	// не может (ListSessions отдаёт только его собственные).
+	RevokeSession(context.Context, *connect.Request[session.RevokeSessionRequest]) (*connect.Response[session.RevokeSessionResponse], error)
 }
 
 // NewIdentitySessionServiceClient constructs a client for the
@@ -83,13 +102,27 @@ func NewIdentitySessionServiceClient(httpClient connect.HTTPClient, baseURL stri
 			connect.WithSchema(identitySessionServiceMethods.ByName("Logout")),
 			connect.WithClientOptions(opts...),
 		),
+		listSessions: connect.NewClient[session.ListSessionsRequest, session.ListSessionsResponse](
+			httpClient,
+			baseURL+IdentitySessionServiceListSessionsProcedure,
+			connect.WithSchema(identitySessionServiceMethods.ByName("ListSessions")),
+			connect.WithClientOptions(opts...),
+		),
+		revokeSession: connect.NewClient[session.RevokeSessionRequest, session.RevokeSessionResponse](
+			httpClient,
+			baseURL+IdentitySessionServiceRevokeSessionProcedure,
+			connect.WithSchema(identitySessionServiceMethods.ByName("RevokeSession")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // identitySessionServiceClient implements IdentitySessionServiceClient.
 type identitySessionServiceClient struct {
-	refresh *connect.Client[session.RefreshRequest, session.RefreshResponse]
-	logout  *connect.Client[session.LogoutRequest, session.LogoutResponse]
+	refresh       *connect.Client[session.RefreshRequest, session.RefreshResponse]
+	logout        *connect.Client[session.LogoutRequest, session.LogoutResponse]
+	listSessions  *connect.Client[session.ListSessionsRequest, session.ListSessionsResponse]
+	revokeSession *connect.Client[session.RevokeSessionRequest, session.RevokeSessionResponse]
 }
 
 // Refresh calls webapi.identity.session.v1.IdentitySessionService.Refresh.
@@ -100,6 +133,16 @@ func (c *identitySessionServiceClient) Refresh(ctx context.Context, req *connect
 // Logout calls webapi.identity.session.v1.IdentitySessionService.Logout.
 func (c *identitySessionServiceClient) Logout(ctx context.Context, req *connect.Request[session.LogoutRequest]) (*connect.Response[session.LogoutResponse], error) {
 	return c.logout.CallUnary(ctx, req)
+}
+
+// ListSessions calls webapi.identity.session.v1.IdentitySessionService.ListSessions.
+func (c *identitySessionServiceClient) ListSessions(ctx context.Context, req *connect.Request[session.ListSessionsRequest]) (*connect.Response[session.ListSessionsResponse], error) {
+	return c.listSessions.CallUnary(ctx, req)
+}
+
+// RevokeSession calls webapi.identity.session.v1.IdentitySessionService.RevokeSession.
+func (c *identitySessionServiceClient) RevokeSession(ctx context.Context, req *connect.Request[session.RevokeSessionRequest]) (*connect.Response[session.RevokeSessionResponse], error) {
+	return c.revokeSession.CallUnary(ctx, req)
 }
 
 // IdentitySessionServiceHandler is an implementation of the
@@ -118,6 +161,19 @@ type IdentitySessionServiceHandler interface {
 	// или уже недействительный refresh-токен не считается ошибкой — результат
 	// (разлогинен) тот же самый.
 	Logout(context.Context, *connect.Request[session.LogoutRequest]) (*connect.Response[session.LogoutResponse], error)
+	// ListSessions перечисляет активные сессии текущего пользователя — не
+	// public (в отличие от Refresh/Logout выше): личность вызывающего
+	// приходит из access-токена, который гейтвей уже проверил (см.
+	// internal/pkg/authctx), а не из refresh-куки. Самообслуживание "где я
+	// залогинен" — без необходимости гасить всё разом, как
+	// IdentityRecoveryService.ResetPassword.
+	ListSessions(context.Context, *connect.Request[session.ListSessionsRequest]) (*connect.Response[session.ListSessionsResponse], error)
+	// RevokeSession гасит ровно одну сессию текущего пользователя по её id —
+	// "выйти с этого устройства", не со всех. session_id, принадлежащий
+	// другому пользователю или не существующий вовсе, — NOT_FOUND в обоих
+	// случаях: отличать их незачем, перечислить чужие id пользователь и так
+	// не может (ListSessions отдаёт только его собственные).
+	RevokeSession(context.Context, *connect.Request[session.RevokeSessionRequest]) (*connect.Response[session.RevokeSessionResponse], error)
 }
 
 // NewIdentitySessionServiceHandler builds an HTTP handler from the service implementation. It
@@ -139,12 +195,28 @@ func NewIdentitySessionServiceHandler(svc IdentitySessionServiceHandler, opts ..
 		connect.WithSchema(identitySessionServiceMethods.ByName("Logout")),
 		connect.WithHandlerOptions(opts...),
 	)
+	identitySessionServiceListSessionsHandler := connect.NewUnaryHandler(
+		IdentitySessionServiceListSessionsProcedure,
+		svc.ListSessions,
+		connect.WithSchema(identitySessionServiceMethods.ByName("ListSessions")),
+		connect.WithHandlerOptions(opts...),
+	)
+	identitySessionServiceRevokeSessionHandler := connect.NewUnaryHandler(
+		IdentitySessionServiceRevokeSessionProcedure,
+		svc.RevokeSession,
+		connect.WithSchema(identitySessionServiceMethods.ByName("RevokeSession")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/webapi.identity.session.v1.IdentitySessionService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case IdentitySessionServiceRefreshProcedure:
 			identitySessionServiceRefreshHandler.ServeHTTP(w, r)
 		case IdentitySessionServiceLogoutProcedure:
 			identitySessionServiceLogoutHandler.ServeHTTP(w, r)
+		case IdentitySessionServiceListSessionsProcedure:
+			identitySessionServiceListSessionsHandler.ServeHTTP(w, r)
+		case IdentitySessionServiceRevokeSessionProcedure:
+			identitySessionServiceRevokeSessionHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -160,4 +232,12 @@ func (UnimplementedIdentitySessionServiceHandler) Refresh(context.Context, *conn
 
 func (UnimplementedIdentitySessionServiceHandler) Logout(context.Context, *connect.Request[session.LogoutRequest]) (*connect.Response[session.LogoutResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("webapi.identity.session.v1.IdentitySessionService.Logout is not implemented"))
+}
+
+func (UnimplementedIdentitySessionServiceHandler) ListSessions(context.Context, *connect.Request[session.ListSessionsRequest]) (*connect.Response[session.ListSessionsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("webapi.identity.session.v1.IdentitySessionService.ListSessions is not implemented"))
+}
+
+func (UnimplementedIdentitySessionServiceHandler) RevokeSession(context.Context, *connect.Request[session.RevokeSessionRequest]) (*connect.Response[session.RevokeSessionResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("webapi.identity.session.v1.IdentitySessionService.RevokeSession is not implemented"))
 }

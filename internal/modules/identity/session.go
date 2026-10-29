@@ -103,3 +103,13 @@ func (m *sessionManager) Revoke(ctx context.Context, refreshToken string) error 
 func (m *sessionManager) RevokeAllSessions(ctx context.Context, userID string) error {
 	return m.repo.RevokeAllSessions(ctx, userID)
 }
+
+// ListSessions — IdentitySessionService.ListSessions.
+func (m *sessionManager) ListSessions(ctx context.Context, userID string) ([]identityrepo.SessionSummary, error) {
+	return m.repo.ListSessions(ctx, userID)
+}
+
+// RevokeSessionByID — IdentitySessionService.RevokeSession.
+func (m *sessionManager) RevokeSessionByID(ctx context.Context, userID, sessionID string) error {
+	return m.repo.RevokeSessionByID(ctx, userID, sessionID)
+}

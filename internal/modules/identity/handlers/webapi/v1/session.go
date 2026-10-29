@@ -9,6 +9,7 @@ import (
 	"connectrpc.com/connect"
 
 	"dmatech.ru/internal/modules/identity/repository"
+	"dmatech.ru/internal/pkg/authctx"
 	sessionv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/session"
 	"dmatech.ru/internal/pkg/contracts/webapi/v1/identity/session/sessionv1connect"
 )
@@ -18,6 +19,12 @@ import (
 type SessionStore interface {
 	Rotate(ctx context.Context, refreshToken, userAgent string) (access, refresh, permissions string, accessExpiresAt time.Time, err error)
 	Revoke(ctx context.Context, refreshToken string) error
+	// ListSessions/RevokeSessionByID — самообслуживание (ListSessions/
+	// RevokeSession ниже): в отличие от Rotate/Revoke, которым личность
+	// приходит из самого refresh-токена, этим двум userID передаёт хендлер
+	// — из access-токена, который гейтвей уже проверил (см. authctx).
+	ListSessions(ctx context.Context, userID string) ([]repository.SessionSummary, error)
+	RevokeSessionByID(ctx context.Context, userID, sessionID string) error
 }
 
 // Sessions — все операции с сессиями, которые нужны identity: выпуск при
@@ -91,4 +98,63 @@ func (h *SessionHandler) Logout(
 	resp := connect.NewResponse(&sessionv1.LogoutResponse{})
 	clearSessionCookies(resp.Header())
 	return resp, nil
+}
+
+// ListSessions — см. doc-комментарий метода в session.proto. Личность
+// вызывающего — из access-токена (authctx.FromContext), не из куки: этот
+// метод не public (см. session.proto), гейтвей уже проверил токен и
+// положил claims в контекст до того, как запрос дошёл сюда (см.
+// authctx.ServerInterceptor в auth.handler.go). ok=false здесь означать не
+// должно вообще — непубличный метод без claims гейтвей бы не пропустил —
+// но на случай расхождения конфигурации (например, вызов напрямую по NATS,
+// минуя гейтвей) отвечаем Unauthenticated, а не паникуем на пустом userID.
+func (h *SessionHandler) ListSessions(
+	ctx context.Context,
+	_ *connect.Request[sessionv1.ListSessionsRequest],
+) (*connect.Response[sessionv1.ListSessionsResponse], error) {
+	claims, ok := authctx.FromContext(ctx)
+	if !ok {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("missing caller identity"))
+	}
+
+	sessions, err := h.sessions.ListSessions(ctx, claims.UserID)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	resp := &sessionv1.ListSessionsResponse{Sessions: make([]*sessionv1.SessionInfo, len(sessions))}
+	for i, s := range sessions {
+		resp.Sessions[i] = &sessionv1.SessionInfo{
+			SessionId: s.ID,
+			UserAgent: s.UserAgent,
+			CreatedAt: s.CreatedAt.Unix(),
+			ExpiresAt: s.ExpiresAt.Unix(),
+			Current:   s.ID == claims.SessionID,
+		}
+	}
+	return connect.NewResponse(resp), nil
+}
+
+// RevokeSession — см. doc-комментарий метода в session.proto.
+func (h *SessionHandler) RevokeSession(
+	ctx context.Context,
+	req *connect.Request[sessionv1.RevokeSessionRequest],
+) (*connect.Response[sessionv1.RevokeSessionResponse], error) {
+	claims, ok := authctx.FromContext(ctx)
+	if !ok {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("missing caller identity"))
+	}
+
+	// session_id непустой — проверено до вызова этого метода (см.
+	// buf.validate.field.cel на этом поле в session.proto).
+	sessionID := req.Msg.GetSessionId()
+
+	err := h.sessions.RevokeSessionByID(ctx, claims.UserID, sessionID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil, keyedError(connect.CodeNotFound, "identity.session.not_found", "session not found")
+	}
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&sessionv1.RevokeSessionResponse{}), nil
 }
