@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package webapi.identity.session.v1;
+
+option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity/session;sessionv1";
+
+import "webapi/v1/options/options.proto";
+
+// IdentitySessionService — обновление и завершение сессии, начатой
+// IdentityAuthService.CompleteAuthentication/IdentityRegistrationService.
+// CompleteRegistration (там же выставляются access/refresh/session_info
+// куки, см. internal/pkg/authctx). У обоих методов здесь нет полей запроса
+// — весь нужный им контекст (refresh-токен) приходит в куке, не в теле:
+// refresh-токен не должен попадать в тело запроса или URL, только в
+// HttpOnly-куку, которую браузер прикладывает сам.
+//
+// Оба метода — public на уровне гейтвея (см. webapi/v1/options/
+// options.proto): их не проверяют по access-токену (тому самому, который
+// истёк или которого вообще нет — это и есть повод звать Refresh), у
+// каждого своя, отдельная проверка refresh-куки внутри хендлера.
+service IdentitySessionService {
+  // Refresh ротирует refresh-токен (старый гасится, выдаётся новый — см.
+  // identity.sessions в миграции и doc-комментарий internal/pkg/authctx) и
+  // выпускает новый access-токен. Невалидный, просроченный или уже
+  // погашенный refresh-токен — UNAUTHENTICATED; повторное предъявление
+  // уже погашенного (не просто просроченного, а именно отозванного через
+  // более раннюю ротацию) трактуется как компрометация — гасит все сессии
+  // этого пользователя, не только текущую.
+  rpc Refresh (RefreshRequest) returns (RefreshResponse) {
+    option (webapi.options.v1.public) = true;
+  }
+
+  // Logout гасит сессию, которой принадлежит предъявленный refresh-токен,
+  // и очищает все три куки (access/refresh/session_info). Отсутствующий
+  // или уже недействительный refresh-токен не считается ошибкой — результат
+  // (разлогинен) тот же самый.
+  rpc Logout (LogoutRequest) returns (LogoutResponse) {
+    option (webapi.options.v1.public) = true;
+  }
+}
+
+message RefreshRequest {}
+
+message RefreshResponse {}
+
+message LogoutRequest {}
+
+message LogoutResponse {}

@@ -8,6 +8,13 @@ postgresUrl: "postgres://postgres:postgres@postgres:5432/db?sslmode=disable"
 # быть одинаковым на всех репликах, иначе поведение для одного identifier
 # будет отличаться между ними (см. internal/pkg/srp.FakeCredentials).
 antiEnumerationKey: "35b9094509467ac07e85b7b58605009ca9164f0e481af9f62c81b4f9367051ee"
+# Дев-секрет (как и antiEnumerationKey выше) — для реального деплоя
+# сгенерировать свой (openssl rand -hex 32) и хранить как секрет, не в этом
+# файле. В отличие от antiEnumerationKey, должен побайтово совпадать не с
+# другими репликами identity, а с authJwtSecret в configs/gateway.yaml —
+# identity подписывает access-токен этим секретом, gateway проверяет
+# подпись тем же (см. README, раздел "Авторизация").
+authJwtSecret: "c0179ae0aa4319df5c8faaf00261f88617425c68ae14310137d944f3f43fee70"
 seeds:
   db: "/mnt/workspace/backend-modular-monolith/seeds/identity/db"
   assets: "/mnt/workspace/backend-modular-monolith/seeds/identity/assets"

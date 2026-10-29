@@ -15,6 +15,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 
+	"dmatech.ru/internal/pkg/authctx"
 	"dmatech.ru/internal/pkg/httpserver"
 	"dmatech.ru/internal/pkg/natsrpc"
 )
@@ -34,10 +35,15 @@ type server struct {
 	nc       *nats.Conn
 	basePath string
 	guard    *methodGuard
+	// verifier — проверка access-токена (см. authenticate). nil в тестах,
+	// которым авторизация не нужна: default-deny всё равно работает —
+	// любой непубличный метод тогда просто всегда 401, публичные методы
+	// verifier не трогают вовсе.
+	verifier *authctx.Verifier
 }
 
-func newServer(cfg HttpConfig, env string, log *slog.Logger, routes *routeTable, nc *nats.Conn) *server {
-	s := &server{cfg: cfg, env: env, log: log, routes: routes, nc: nc}
+func newServer(cfg HttpConfig, env string, log *slog.Logger, routes *routeTable, nc *nats.Conn, verifier *authctx.Verifier) *server {
+	s := &server{cfg: cfg, env: env, log: log, routes: routes, nc: nc, verifier: verifier}
 	s.basePath = strings.TrimSuffix(path.Join("/", cfg.BaseUrl), "/")
 	s.guard = newMethodGuard(cfg.RateLimitRPS, cfg.RateLimitBurst, cfg.CircuitBreakerThreshold, cfg.CircuitBreakerCooldown)
 
@@ -107,6 +113,21 @@ func (s *server) handleProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Всегда стираем входящие значения доверенных заголовков — иначе
+	// клиент мог бы просто выставить такой заголовок сам, и модуль принял
+	// бы его личность без проверки (см. doc-комментарий authctx про то,
+	// что доверие к этим заголовкам целиком держится на том, что до NATS
+	// запрос может дойти только отсюда). Для публичных методов они
+	// останутся пустыми — проверять токен, который метод не требует,
+	// незачем.
+	r.Header.Del(authctx.HeaderUserID)
+	r.Header.Del(authctx.HeaderPermissions)
+	r.Header.Del(authctx.HeaderSessionID)
+	if !rt.PublicMethods[methodPath] && !s.authenticate(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	switch s.guard.Before(extractClientIP(r, s.cfg.TrustProxyHeaders), methodPath) {
 	case guardRateLimited:
 		http.Error(w, "rate limit exceeded for this method", http.StatusTooManyRequests)
@@ -156,6 +177,33 @@ func (s *server) handleProxy(w http.ResponseWriter, r *http.Request) {
 	// сервиса, даже 5xx, — не инфраструктурный отказ NATS, а бизнес-логика.
 	s.guard.After(methodPath, true)
 	writeProxyResponse(w, reply)
+}
+
+// authenticate проверяет access-токен из куки authctx.CookieAccessToken и,
+// если он валиден, выставляет на r доверенные заголовки
+// (authctx.HeaderUserID и т.п.), которые затем пересылаются в NATS как
+// есть (см. handleProxy, вызывающий этот метод только для непубличных
+// методов — см. doc-комментарий там про то, кто стирает заголовки до
+// вызова). Отсутствующий verifier (см. doc-комментарий поля server.verifier)
+// или любая ошибка проверки — просто false, без детализации причины
+// клиенту: разница между "токена нет" и "токен невалиден" ему не нужна.
+func (s *server) authenticate(r *http.Request) bool {
+	if s.verifier == nil {
+		return false
+	}
+	cookie, err := r.Cookie(authctx.CookieAccessToken)
+	if err != nil {
+		return false
+	}
+	claims, err := s.verifier.Verify(cookie.Value)
+	if err != nil {
+		return false
+	}
+
+	r.Header.Set(authctx.HeaderUserID, claims.UserID)
+	r.Header.Set(authctx.HeaderPermissions, claims.Permissions)
+	r.Header.Set(authctx.HeaderSessionID, claims.SessionID)
+	return true
 }
 
 func writeProxyResponse(w http.ResponseWriter, reply *nats.Msg) {

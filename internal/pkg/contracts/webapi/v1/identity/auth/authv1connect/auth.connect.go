@@ -52,7 +52,10 @@ type IdentityAuthServiceClient interface {
 	// CompleteAuthentication — второй шаг SRP: клиент доказывает знание пароля
 	// (client_proof), сервер проверяет его и в ответ присылает собственное
 	// доказательство (server_proof) для взаимной аутентификации. Session_id
-	// одноразовый: повторный вызов с тем же значением вернёт NOT_FOUND.
+	// одноразовый: повторный вызов с тем же значением вернёт NOT_FOUND. При
+	// успехе сервер устанавливает access/refresh/session_info куки (см.
+	// internal/pkg/authctx) — ответ по телу не меняется, токены едут через
+	// Set-Cookie на этом же ответе.
 	CompleteAuthentication(context.Context, *connect.Request[auth.CompleteAuthenticationRequest]) (*connect.Response[auth.CompleteAuthenticationResponse], error)
 }
 
@@ -110,7 +113,10 @@ type IdentityAuthServiceHandler interface {
 	// CompleteAuthentication — второй шаг SRP: клиент доказывает знание пароля
 	// (client_proof), сервер проверяет его и в ответ присылает собственное
 	// доказательство (server_proof) для взаимной аутентификации. Session_id
-	// одноразовый: повторный вызов с тем же значением вернёт NOT_FOUND.
+	// одноразовый: повторный вызов с тем же значением вернёт NOT_FOUND. При
+	// успехе сервер устанавливает access/refresh/session_info куки (см.
+	// internal/pkg/authctx) — ответ по телу не меняется, токены едут через
+	// Set-Cookie на этом же ответе.
 	CompleteAuthentication(context.Context, *connect.Request[auth.CompleteAuthenticationRequest]) (*connect.Response[auth.CompleteAuthenticationResponse], error)
 }
 

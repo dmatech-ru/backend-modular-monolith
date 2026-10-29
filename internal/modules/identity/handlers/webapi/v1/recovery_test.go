@@ -143,15 +143,16 @@ func (f *fakeRecoveryCodeSender) codeFor(destination string) string {
 
 const testPasswordResetFreeze = 24 * time.Hour
 
-func newTestRecoveryHandler(approveCaptcha bool) (*RecoveryHandler, *fakeRecoveryRepository, *fakeRecoveryCodeSender) {
+func newTestRecoveryHandler(approveCaptcha bool) (*RecoveryHandler, *fakeRecoveryRepository, *fakeRecoveryCodeSender, *fakeSessions) {
 	repo := newFakeRecoveryRepository()
 	codes := newFakeRecoveryCodeSender()
-	h := NewRecoveryHandler(repo, &fakeCaptchaClient{result: approveCaptcha}, codes, testPasswordResetFreeze)
-	return h, repo, codes
+	sessions := newFakeSessions()
+	h := NewRecoveryHandler(repo, &fakeCaptchaClient{result: approveCaptcha}, codes, sessions, testPasswordResetFreeze)
+	return h, repo, codes, sessions
 }
 
 func TestInitiateRecovery_RequiresCaptchaWhenNotSolved(t *testing.T) {
-	h, _, _ := newTestRecoveryHandler(false)
+	h, _, _, _ := newTestRecoveryHandler(false)
 
 	resp, err := h.InitiateRecovery(context.Background(), connect.NewRequest(&recoveryv1.InitiateRecoveryRequest{
 		Identifier: "alice@example.com",
@@ -165,7 +166,7 @@ func TestInitiateRecovery_RequiresCaptchaWhenNotSolved(t *testing.T) {
 }
 
 func TestInitiateRecovery_NotFound(t *testing.T) {
-	h, _, _ := newTestRecoveryHandler(true)
+	h, _, _, _ := newTestRecoveryHandler(true)
 
 	resp, err := h.InitiateRecovery(context.Background(), connect.NewRequest(&recoveryv1.InitiateRecoveryRequest{
 		Identifier: "nobody@example.com", PowChallenge: "c", PowNonce: "n",
@@ -183,7 +184,7 @@ func TestInitiateRecovery_NotFound(t *testing.T) {
 // doc-комментарий AvailableMethod) — но не MAX, для него сегодня нет даже
 // способа решить, доступен ли он (см. recoveryDestination).
 func TestInitiateRecovery_AvailableListsEmailSmsTelegramNotMax(t *testing.T) {
-	h, repo, _ := newTestRecoveryHandler(true)
+	h, repo, _, _ := newTestRecoveryHandler(true)
 	repo.accounts["alice@example.com"] = repository.RecoveryAccount{
 		UserID: "user-1", Email: strPtr("alice@example.com"), Phone: strPtr("+79990001234"),
 	}
@@ -224,7 +225,7 @@ func TestInitiateRecovery_AvailableListsEmailSmsTelegramNotMax(t *testing.T) {
 }
 
 func TestSendRecoveryCode_RejectsUnavailableChannel(t *testing.T) {
-	h, repo, _ := newTestRecoveryHandler(true)
+	h, repo, _, _ := newTestRecoveryHandler(true)
 	repo.accounts["alice@example.com"] = repository.RecoveryAccount{UserID: "user-1", Email: strPtr("alice@example.com")}
 	initResp, err := h.InitiateRecovery(context.Background(), connect.NewRequest(&recoveryv1.InitiateRecoveryRequest{
 		Identifier: "alice@example.com", PowChallenge: "c", PowNonce: "n",
@@ -248,7 +249,7 @@ func TestSendRecoveryCode_RejectsUnavailableChannel(t *testing.T) {
 }
 
 func TestSendRecoveryCode_SendsToEmailDestination(t *testing.T) {
-	h, repo, codes := newTestRecoveryHandler(true)
+	h, repo, codes, _ := newTestRecoveryHandler(true)
 	repo.accounts["alice@example.com"] = repository.RecoveryAccount{UserID: "user-1", Email: strPtr("alice@example.com")}
 	initResp, err := h.InitiateRecovery(context.Background(), connect.NewRequest(&recoveryv1.InitiateRecoveryRequest{
 		Identifier: "alice@example.com", PowChallenge: "c", PowNonce: "n",
@@ -274,7 +275,7 @@ func TestSendRecoveryCode_SendsToEmailDestination(t *testing.T) {
 }
 
 func TestConfirmRecoveryCode_MismatchThenSuccess(t *testing.T) {
-	h, repo, codes := newTestRecoveryHandler(true)
+	h, repo, codes, _ := newTestRecoveryHandler(true)
 	repo.accounts["alice@example.com"] = repository.RecoveryAccount{UserID: "user-1", Email: strPtr("alice@example.com")}
 	initResp, err := h.InitiateRecovery(context.Background(), connect.NewRequest(&recoveryv1.InitiateRecoveryRequest{
 		Identifier: "alice@example.com", PowChallenge: "c", PowNonce: "n",
@@ -306,7 +307,7 @@ func TestConfirmRecoveryCode_MismatchThenSuccess(t *testing.T) {
 }
 
 func TestResetPassword_RequiresConfirmedCode(t *testing.T) {
-	h, repo, _ := newTestRecoveryHandler(true)
+	h, repo, _, _ := newTestRecoveryHandler(true)
 	repo.accounts["alice@example.com"] = repository.RecoveryAccount{UserID: "user-1", Email: strPtr("alice@example.com")}
 	initResp, err := h.InitiateRecovery(context.Background(), connect.NewRequest(&recoveryv1.InitiateRecoveryRequest{
 		Identifier: "alice@example.com", PowChallenge: "c", PowNonce: "n",
@@ -328,7 +329,7 @@ func TestResetPassword_RequiresConfirmedCode(t *testing.T) {
 }
 
 func TestResetPassword_SucceedsAfterConfirmationAndReturnsFrozenUntil(t *testing.T) {
-	h, repo, codes := newTestRecoveryHandler(true)
+	h, repo, codes, sessions := newTestRecoveryHandler(true)
 	repo.accounts["alice@example.com"] = repository.RecoveryAccount{UserID: "user-1", Email: strPtr("alice@example.com")}
 	initResp, err := h.InitiateRecovery(context.Background(), connect.NewRequest(&recoveryv1.InitiateRecoveryRequest{
 		Identifier: "alice@example.com", PowChallenge: "c", PowNonce: "n",
@@ -360,6 +361,9 @@ func TestResetPassword_SucceedsAfterConfirmationAndReturnsFrozenUntil(t *testing
 	wantFrozenUntil := before.Add(testPasswordResetFreeze).Unix()
 	if got := resp.Msg.GetFrozenUntil(); got < wantFrozenUntil || got > wantFrozenUntil+5 {
 		t.Fatalf("frozen_until = %d, want close to %d", got, wantFrozenUntil)
+	}
+	if !sessions.revoked["user-1"] {
+		t.Fatal("expected ResetPassword to revoke all of the user's sessions")
 	}
 
 	// Сессия одноразовая — повторный вызов должен вернуть NotFound.

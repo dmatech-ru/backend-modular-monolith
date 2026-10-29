@@ -8,6 +8,7 @@ package registrationv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "dmatech.ru/internal/pkg/contracts/webapi/v1/options"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -842,7 +843,7 @@ var File_webapi_v1_identity_registration_registration_proto protoreflect.FileDes
 
 const file_webapi_v1_identity_registration_registration_proto_rawDesc = "" +
 	"\n" +
-	"2webapi/v1/identity/registration/registration.proto\x12\x1fwebapi.identity.registration.v1\x1a\x1bbuf/validate/validate.proto\"\xd7\x01\n" +
+	"2webapi/v1/identity/registration/registration.proto\x12\x1fwebapi.identity.registration.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fwebapi/v1/options/options.proto\"\xd7\x01\n" +
 	"\x16CheckIdentifierRequest\x12{\n" +
 	"\n" +
 	"identifier\x18\x01 \x01(\tB[\xbaHX\xba\x01U\n" +
@@ -908,14 +909,14 @@ const file_webapi_v1_identity_registration_registration_proto_rawDesc = "" +
 	"\vmiddle_name\x18\x06 \x01(\tR\n" +
 	"middleName\"7\n" +
 	"\x1cCompleteRegistrationResponse\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId2\xb6\a\n" +
-	"\x1bIdentityRegistrationService\x12\x84\x01\n" +
-	"\x0fCheckIdentifier\x127.webapi.identity.registration.v1.CheckIdentifierRequest\x1a8.webapi.identity.registration.v1.CheckIdentifierResponse\x12\x99\x01\n" +
-	"\x16StartPhoneVerification\x12>.webapi.identity.registration.v1.StartPhoneVerificationRequest\x1a?.webapi.identity.registration.v1.StartPhoneVerificationResponse\x12\x9f\x01\n" +
-	"\x18ConfirmPhoneVerification\x12@.webapi.identity.registration.v1.ConfirmPhoneVerificationRequest\x1aA.webapi.identity.registration.v1.ConfirmPhoneVerificationResponse\x12\x99\x01\n" +
-	"\x16StartEmailVerification\x12>.webapi.identity.registration.v1.StartEmailVerificationRequest\x1a?.webapi.identity.registration.v1.StartEmailVerificationResponse\x12\x9f\x01\n" +
-	"\x18ConfirmEmailVerification\x12@.webapi.identity.registration.v1.ConfirmEmailVerificationRequest\x1aA.webapi.identity.registration.v1.ConfirmEmailVerificationResponse\x12\x93\x01\n" +
-	"\x14CompleteRegistration\x12<.webapi.identity.registration.v1.CompleteRegistrationRequest\x1a=.webapi.identity.registration.v1.CompleteRegistrationResponseB\xa9\x02\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId2\xda\a\n" +
+	"\x1bIdentityRegistrationService\x12\x8a\x01\n" +
+	"\x0fCheckIdentifier\x127.webapi.identity.registration.v1.CheckIdentifierRequest\x1a8.webapi.identity.registration.v1.CheckIdentifierResponse\"\x04\x80\xb5\x18\x01\x12\x9f\x01\n" +
+	"\x16StartPhoneVerification\x12>.webapi.identity.registration.v1.StartPhoneVerificationRequest\x1a?.webapi.identity.registration.v1.StartPhoneVerificationResponse\"\x04\x80\xb5\x18\x01\x12\xa5\x01\n" +
+	"\x18ConfirmPhoneVerification\x12@.webapi.identity.registration.v1.ConfirmPhoneVerificationRequest\x1aA.webapi.identity.registration.v1.ConfirmPhoneVerificationResponse\"\x04\x80\xb5\x18\x01\x12\x9f\x01\n" +
+	"\x16StartEmailVerification\x12>.webapi.identity.registration.v1.StartEmailVerificationRequest\x1a?.webapi.identity.registration.v1.StartEmailVerificationResponse\"\x04\x80\xb5\x18\x01\x12\xa5\x01\n" +
+	"\x18ConfirmEmailVerification\x12@.webapi.identity.registration.v1.ConfirmEmailVerificationRequest\x1aA.webapi.identity.registration.v1.ConfirmEmailVerificationResponse\"\x04\x80\xb5\x18\x01\x12\x99\x01\n" +
+	"\x14CompleteRegistration\x12<.webapi.identity.registration.v1.CompleteRegistrationRequest\x1a=.webapi.identity.registration.v1.CompleteRegistrationResponse\"\x04\x80\xb5\x18\x01B\xa9\x02\n" +
 	"#com.webapi.identity.registration.v1B\x11RegistrationProtoP\x01ZPdmatech.ru/internal/pkg/contracts/webapi/v1/identity/registration;registrationv1\xa2\x02\x03WIR\xaa\x02\x1fWebapi.Identity.Registration.V1\xca\x02\x1fWebapi\\Identity\\Registration\\V1\xe2\x02+Webapi\\Identity\\Registration\\V1\\GPBMetadata\xea\x02\"Webapi::Identity::Registration::V1b\x06proto3"
 
 var (

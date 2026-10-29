@@ -5,6 +5,7 @@ package webapi.identity.recovery.v1;
 option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity/recovery;recoveryv1";
 
 import "buf/validate/validate.proto";
+import "webapi/v1/options/options.proto";
 
 // IdentityRecoveryService — восстановление доступа: идентификатор →
 // доступные способы получить код → выбор способа и отправка кода →
@@ -59,9 +60,10 @@ import "buf/validate/validate.proto";
 // конфиге identity). На момент этого контракта enforcement заморозки
 // ограничен: других чувствительных операций (смена email/телефона и т.п.)
 // в проекте пока не существует, так что frozen_until — это зафиксированный
-// факт на будущее, а не действующий запрет прямо сейчас. Также сброс
-// пароля не инвалидирует существующие сессии — в проекте пока нет самого
-// механизма сессий/токенов (см. README "Известные ограничения").
+// факт на будущее, а не действующий запрет прямо сейчас. Также гасит все
+// существующие сессии пользователя (identity.sessions, см.
+// internal/pkg/authctx) — после сброса пароля ни один ранее выданный
+// refresh-токен больше не ротируется.
 //
 // identifier — email, телефон или username (identity.auth.username,
 // миграция 0011); регистронезависимо для email/username. Ни один текущий
@@ -73,25 +75,33 @@ service IdentityRecoveryService {
   // восстановления. STATUS_NOT_FOUND и список способов — по одному и тому
   // же классу причин неотличимы от STATUS_CAPTCHA_REQUIRED только в
   // смысле "не раскрыто больше, чем должно": см. комментарий сервиса.
-  rpc InitiateRecovery (InitiateRecoveryRequest) returns (InitiateRecoveryResponse);
+  rpc InitiateRecovery (InitiateRecoveryRequest) returns (InitiateRecoveryResponse) {
+    option (webapi.options.v1.public) = true;
+  }
 
   // SendRecoveryCode отправляет одноразовый код по выбранному каналу.
   // Канал должен быть среди тех, что InitiateRecovery перечислил как
   // доступные для этой сессии — иначе INVALID_ARGUMENT. Повторный вызов
   // (в том числе с другим каналом) — переотправка, старый код перестаёт
   // быть действителен.
-  rpc SendRecoveryCode (SendRecoveryCodeRequest) returns (SendRecoveryCodeResponse);
+  rpc SendRecoveryCode (SendRecoveryCodeRequest) returns (SendRecoveryCodeResponse) {
+    option (webapi.options.v1.public) = true;
+  }
 
   // ConfirmRecoveryCode проверяет код. Неверный код — UNAUTHENTICATED;
   // истёкший/некорректный recovery_session_id — NOT_FOUND; слишком много
   // неверных попыток — RESOURCE_EXHAUSTED (лимит — тот же, что у
   // IdentityRegistrationService: 5 попыток на код).
-  rpc ConfirmRecoveryCode (ConfirmRecoveryCodeRequest) returns (ConfirmRecoveryCodeResponse);
+  rpc ConfirmRecoveryCode (ConfirmRecoveryCodeRequest) returns (ConfirmRecoveryCodeResponse) {
+    option (webapi.options.v1.public) = true;
+  }
 
   // ResetPassword — финальный шаг, требует подтверждённого кода в этой
   // сессии (иначе FAILED_PRECONDITION). Завершает сессию восстановления
   // (одноразовая, повторный вызов — NOT_FOUND).
-  rpc ResetPassword (ResetPasswordRequest) returns (ResetPasswordResponse);
+  rpc ResetPassword (ResetPasswordRequest) returns (ResetPasswordResponse) {
+    option (webapi.options.v1.public) = true;
+  }
 }
 
 // DeliveryChannel — см. doc-комментарий сервиса выше про то, почему это

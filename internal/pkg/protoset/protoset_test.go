@@ -6,17 +6,18 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 
-	captchav1 "dmatech.ru/internal/pkg/contracts/webapi/v1/captcha"
+	deliveryv1 "dmatech.ru/internal/pkg/contracts/peer/common/v1/delivery"
 	errorsv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/common"
 )
 
 func TestBuild_SingleFileWithoutImports(t *testing.T) {
-	// captcha.proto (webapi) — единственный оставшийся файл без импортов
-	// вообще: auth.proto теперь импортирует buf/validate/validate.proto
-	// (см. (buf.validate.field).cel в нём) и больше не подходит для этого
-	// теста — транзитивные импорты validate.proto покрывает
+	// delivery.proto (peer/common) — единственный оставшийся файл без
+	// импортов вообще: и auth.proto, и captcha.proto (webapi) теперь
+	// импортируют webapi/v1/options/options.proto (public-методы) и/или
+	// buf/validate/validate.proto и больше не подходят для этого теста —
+	// транзитивные импорты таких файлов покрывает
 	// TestBuild_TransitiveImportsPrecedeDependent ниже не хуже.
-	data, err := Build(captchav1.File_webapi_v1_captcha_captcha_proto)
+	data, err := Build(deliveryv1.File_peer_common_v1_delivery_delivery_proto)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -25,7 +26,7 @@ func TestBuild_SingleFileWithoutImports(t *testing.T) {
 	if err := proto.Unmarshal(data, &set); err != nil {
 		t.Fatalf("failed to unmarshal descriptor set: %v", err)
 	}
-	if len(set.File) != 1 || set.File[0].GetName() != "webapi/v1/captcha/captcha.proto" {
+	if len(set.File) != 1 || set.File[0].GetName() != "peer/common/v1/delivery/delivery.proto" {
 		t.Fatalf("unexpected file set: %+v", set.File)
 	}
 }

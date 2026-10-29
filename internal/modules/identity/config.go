@@ -32,6 +32,13 @@ type configuration struct {
 	// факт в ответе, enforcement нигде не реализован — см. README
 	// "Известные ограничения").
 	PasswordResetFreezeHours int `yaml:"passwordResetFreezeHours" env:"IDENTITY_PASSWORD_RESET_FREEZE_HOURS" env-default:"24"`
+
+	// AuthJWTSecret — hex-секрет (≥32 байта), которым identity подписывает
+	// access-токены (internal/pkg/authctx.Issuer) — см. doc-комментарий
+	// AuthJWTSecret в gateway/config.go про то, почему имя переменной без
+	// обычного префикса IDENTITY_: значение должно быть побайтово
+	// одинаковым в конфиге identity и в конфиге gateway.
+	AuthJWTSecret string `yaml:"authJwtSecret" env:"AUTH_JWT_SECRET" env-required:"true"`
 }
 
 // seedsConfig — настройки SQL-сидов схемы identity, применяются только

@@ -5,24 +5,38 @@ package webapi.identity.auth.v1;
 option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity/auth;authv1";
 
 import "buf/validate/validate.proto";
+import "webapi/v1/options/options.proto";
 
 // IdentityAuthService — только SRP-вход для уже существующих аккаунтов.
 // Регистрация — отдельный, многошаговый контракт, см.
 // IdentityRegistrationService в registration.proto (свой пакет, см. там; бывший
 // одношаговый Register здесь заменён её CompleteRegistration: он не
 // проверял владение телефоном/почтой вообще).
+//
+// Оба метода — public (см. webapi/v1/options/options.proto): до
+// InitializeSession у клиента по определению ещё нет токена, а
+// CompleteAuthentication — это и есть момент его получения (см.
+// doc-комментарий у него про выдачу access/refresh после успешной
+// проверки). Сам access/refresh-механизм — internal/pkg/authctx.
 service IdentityAuthService {
   // InitializeSession начинает вход по identifier (email или телефон) и
   // возвращает параметры SRP-обмена (соль и публичное значение сервера) для
   // второго шага. Если учётной записи с таким identifier не существует,
   // возвращает ошибку NOT_FOUND.
-  rpc InitializeSession (InitializeSessionRequest) returns (InitializeSessionResponse);
+  rpc InitializeSession (InitializeSessionRequest) returns (InitializeSessionResponse) {
+    option (webapi.options.v1.public) = true;
+  }
 
   // CompleteAuthentication — второй шаг SRP: клиент доказывает знание пароля
   // (client_proof), сервер проверяет его и в ответ присылает собственное
   // доказательство (server_proof) для взаимной аутентификации. Session_id
-  // одноразовый: повторный вызов с тем же значением вернёт NOT_FOUND.
-  rpc CompleteAuthentication (CompleteAuthenticationRequest) returns (CompleteAuthenticationResponse);
+  // одноразовый: повторный вызов с тем же значением вернёт NOT_FOUND. При
+  // успехе сервер устанавливает access/refresh/session_info куки (см.
+  // internal/pkg/authctx) — ответ по телу не меняется, токены едут через
+  // Set-Cookie на этом же ответе.
+  rpc CompleteAuthentication (CompleteAuthenticationRequest) returns (CompleteAuthenticationResponse) {
+    option (webapi.options.v1.public) = true;
+  }
 }
 
 message InitializeSessionRequest {

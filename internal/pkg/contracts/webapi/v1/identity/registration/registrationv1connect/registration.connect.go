@@ -88,7 +88,10 @@ type IdentityRegistrationServiceClient interface {
 	// salt/verifier клиент вычисляет локально (srp.GenerateSalt +
 	// srp.ComputeVerifier) и присылает уже готовыми. Требует подтверждённых
 	// телефона и email в этой сессии (иначе FAILED_PRECONDITION). Создаёт
-	// учётную запись и завершает сессию регистрации.
+	// учётную запись, завершает сессию регистрации и сразу логинит (те же
+	// access/refresh/session_info куки, что у CompleteAuthentication, см.
+	// internal/pkg/authctx) — отдельный повторный вход сразу после
+	// регистрации был бы лишним шагом.
 	CompleteRegistration(context.Context, *connect.Request[registration.CompleteRegistrationRequest]) (*connect.Response[registration.CompleteRegistrationResponse], error)
 }
 
@@ -223,7 +226,10 @@ type IdentityRegistrationServiceHandler interface {
 	// salt/verifier клиент вычисляет локально (srp.GenerateSalt +
 	// srp.ComputeVerifier) и присылает уже готовыми. Требует подтверждённых
 	// телефона и email в этой сессии (иначе FAILED_PRECONDITION). Создаёт
-	// учётную запись и завершает сессию регистрации.
+	// учётную запись, завершает сессию регистрации и сразу логинит (те же
+	// access/refresh/session_info куки, что у CompleteAuthentication, см.
+	// internal/pkg/authctx) — отдельный повторный вход сразу после
+	// регистрации был бы лишним шагом.
 	CompleteRegistration(context.Context, *connect.Request[registration.CompleteRegistrationRequest]) (*connect.Response[registration.CompleteRegistrationResponse], error)
 }
 

@@ -7,6 +7,7 @@
 package captchav1
 
 import (
+	_ "dmatech.ru/internal/pkg/contracts/webapi/v1/options"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -125,7 +126,7 @@ var File_webapi_v1_captcha_captcha_proto protoreflect.FileDescriptor
 
 const file_webapi_v1_captcha_captcha_proto_rawDesc = "" +
 	"\n" +
-	"\x1fwebapi/v1/captcha/captcha.proto\x12\x11webapi.captcha.v1\"\x17\n" +
+	"\x1fwebapi/v1/captcha/captcha.proto\x12\x11webapi.captcha.v1\x1a\x1fwebapi/v1/options/options.proto\"\x17\n" +
 	"\x15IssueChallengeRequest\"u\n" +
 	"\x16IssueChallengeResponse\x12\x1c\n" +
 	"\tchallenge\x18\x01 \x01(\tR\tchallenge\x12\x1e\n" +
@@ -133,9 +134,9 @@ const file_webapi_v1_captcha_captcha_proto_rawDesc = "" +
 	"difficulty\x18\x02 \x01(\x05R\n" +
 	"difficulty\x12\x1d\n" +
 	"\n" +
-	"expires_at\x18\x03 \x01(\x03R\texpiresAt2w\n" +
-	"\x0eCaptchaService\x12e\n" +
-	"\x0eIssueChallenge\x12(.webapi.captcha.v1.IssueChallengeRequest\x1a).webapi.captcha.v1.IssueChallengeResponseB\xca\x01\n" +
+	"expires_at\x18\x03 \x01(\x03R\texpiresAt2}\n" +
+	"\x0eCaptchaService\x12k\n" +
+	"\x0eIssueChallenge\x12(.webapi.captcha.v1.IssueChallengeRequest\x1a).webapi.captcha.v1.IssueChallengeResponse\"\x04\x80\xb5\x18\x01B\xca\x01\n" +
 	"\x15com.webapi.captcha.v1B\fCaptchaProtoP\x01Z=dmatech.ru/internal/pkg/contracts/webapi/v1/captcha;captchav1\xa2\x02\x03WCX\xaa\x02\x11Webapi.Captcha.V1\xca\x02\x11Webapi\\Captcha\\V1\xe2\x02\x1dWebapi\\Captcha\\V1\\GPBMetadata\xea\x02\x13Webapi::Captcha::V1b\x06proto3"
 
 var (

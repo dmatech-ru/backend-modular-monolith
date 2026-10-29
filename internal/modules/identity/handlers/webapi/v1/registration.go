@@ -55,21 +55,22 @@ type EmailSender interface {
 type RegistrationHandler struct {
 	registrationv1connect.UnimplementedIdentityRegistrationServiceHandler
 
-	repo    RegistrationRepository
-	captcha CaptchaClient
-	phones  PhoneSender
-	emails  EmailSender
+	repo     RegistrationRepository
+	captcha  CaptchaClient
+	phones   PhoneSender
+	emails   EmailSender
+	sessions SessionIssuer
 }
 
 // NewRegistrationHandler создаёт обработчик IdentityRegistrationService.
-func NewRegistrationHandler(repo RegistrationRepository, captcha CaptchaClient, phones PhoneSender, emails EmailSender) *RegistrationHandler {
-	return &RegistrationHandler{repo: repo, captcha: captcha, phones: phones, emails: emails}
+func NewRegistrationHandler(repo RegistrationRepository, captcha CaptchaClient, phones PhoneSender, emails EmailSender, sessions SessionIssuer) *RegistrationHandler {
+	return &RegistrationHandler{repo: repo, captcha: captcha, phones: phones, emails: emails, sessions: sessions}
 }
 
 // NewRegistrationServiceHandler собирает HTTP-обработчик
 // IdentityRegistrationService для монтирования в веб-сервер.
-func NewRegistrationServiceHandler(repo RegistrationRepository, captcha CaptchaClient, phones PhoneSender, emails EmailSender, opts ...connect.HandlerOption) (string, http.Handler) {
-	return registrationv1connect.NewIdentityRegistrationServiceHandler(NewRegistrationHandler(repo, captcha, phones, emails), opts...)
+func NewRegistrationServiceHandler(repo RegistrationRepository, captcha CaptchaClient, phones PhoneSender, emails EmailSender, sessions SessionIssuer, opts ...connect.HandlerOption) (string, http.Handler) {
+	return registrationv1connect.NewIdentityRegistrationServiceHandler(NewRegistrationHandler(repo, captcha, phones, emails, sessions), opts...)
 }
 
 // verifyPoW — true, только если challenge/nonce присланы и проверка у
@@ -249,7 +250,11 @@ func (h *RegistrationHandler) ConfirmEmailVerification(
 }
 
 // CompleteRegistration — финальный шаг: пароль задаётся клиентом локально
-// (как и IdentityAuthService.Register), сервер получает только salt/verifier.
+// (как и IdentityAuthService.Register), сервер получает только
+// salt/verifier. При успехе сразу выпускает сессию (см.
+// IdentityAuthService.CompleteAuthentication и doc-комментарий этого RPC
+// в registration.proto) — отдельный повторный вход сразу после
+// регистрации был бы лишним шагом.
 func (h *RegistrationHandler) CompleteRegistration(
 	ctx context.Context,
 	req *connect.Request[registrationv1.CompleteRegistrationRequest],
@@ -286,7 +291,14 @@ func (h *RegistrationHandler) CompleteRegistration(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	return connect.NewResponse(&registrationv1.CompleteRegistrationResponse{UserId: userID}), nil
+	access, refresh, permissions, accessExpiresAt, err := h.sessions.IssueSession(ctx, userID, req.Header().Get("User-Agent"))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	resp := connect.NewResponse(&registrationv1.CompleteRegistrationResponse{UserId: userID})
+	setSessionCookies(resp.Header(), access, refresh, permissions, accessExpiresAt)
+	return resp, nil
 }
 
 // mapVerifyCodeError переводит ошибки repository.VerifyPhoneCode/

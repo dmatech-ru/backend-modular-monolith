@@ -4,6 +4,8 @@ package webapi.captcha.v1;
 
 option go_package = "dmatech.ru/internal/modules/captcha/proto/webapi/v1/captcha;captchawebapiv1";
 
+import "webapi/v1/options/options.proto";
+
 // CaptchaService (webapi) — публичная часть контракта captcha-модуля,
 // единственное, что реально нужно показать браузеру: свежий proof-of-work
 // challenge. Браузер решает его сам (JS, доли секунды CPU) и прикладывает
@@ -26,7 +28,11 @@ service CaptchaService {
   // не выбирает — её определяет сервис сам (может поднять при повышенной
   // нагрузке/подозрительной активности), иначе параметр стало бы можно
   // занулить прямо в запросе.
-  rpc IssueChallenge (IssueChallengeRequest) returns (IssueChallengeResponse);
+  rpc IssueChallenge (IssueChallengeRequest) returns (IssueChallengeResponse) {
+    // public: challenge нужен до того, как у клиента появится токен
+    // (решается ради CheckIdentifier/StartPhoneVerification и т.п.).
+    option (webapi.options.v1.public) = true;
+  }
 }
 
 message IssueChallengeRequest {}

@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 	"testing"
 
 	"connectrpc.com/connect"
 
 	"dmatech.ru/internal/modules/identity/repository"
+	"dmatech.ru/internal/pkg/authctx"
 	registrationv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/registration"
 	"dmatech.ru/internal/pkg/srp"
 )
@@ -187,7 +189,7 @@ func newTestRegistrationHandler(approveCaptcha bool) (*RegistrationHandler, *fak
 	repo := newFakeRegistrationRepository()
 	phones := newFakeSender()
 	emails := newFakeSender()
-	h := NewRegistrationHandler(repo, &fakeCaptchaClient{result: approveCaptcha}, phones, emails)
+	h := NewRegistrationHandler(repo, &fakeCaptchaClient{result: approveCaptcha}, phones, emails, newFakeSessions())
 	return h, repo, phones, emails
 }
 
@@ -424,6 +426,19 @@ func TestRegistrationFlow_EndToEndSucceeds(t *testing.T) {
 	}
 	if completeResp.Msg.GetUserId() == "" {
 		t.Fatal("expected a non-empty user_id")
+	}
+
+	// CompleteRegistration авто-логинит (см. doc-комментарий метода) — те
+	// же три куки, что у IdentityAuthService.CompleteAuthentication.
+	cookies := (&http.Response{Header: completeResp.Header()}).Cookies()
+	names := map[string]bool{}
+	for _, c := range cookies {
+		names[c.Name] = true
+	}
+	for _, want := range []string{authctx.CookieAccessToken, authctx.CookieRefreshToken, authctx.CookieSessionInfo} {
+		if !names[want] {
+			t.Fatalf("missing %s cookie in CompleteRegistration response, got %v", want, names)
+		}
 	}
 
 	// Повторный вызов с той же сессией — она одноразовая.

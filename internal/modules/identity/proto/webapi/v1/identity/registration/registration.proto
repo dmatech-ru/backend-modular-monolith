@@ -5,6 +5,7 @@ package webapi.identity.registration.v1;
 option go_package = "dmatech.ru/internal/modules/identity/proto/webapi/v1/identity/registration;registrationv1";
 
 import "buf/validate/validate.proto";
+import "webapi/v1/options/options.proto";
 
 // IdentityRegistrationService — многошаговая регистрация: телефон с согласием
 // на обработку персональных данных → подтверждение телефона кодом из SMS →
@@ -56,7 +57,9 @@ import "buf/validate/validate.proto";
 service IdentityRegistrationService {
   // CheckIdentifier проверяет, существует ли уже учётная запись с таким
   // identifier (email/телефон/username — как и в InitializeSession).
-  rpc CheckIdentifier (CheckIdentifierRequest) returns (CheckIdentifierResponse);
+  rpc CheckIdentifier (CheckIdentifierRequest) returns (CheckIdentifierResponse) {
+    option (webapi.options.v1.public) = true;
+  }
 
   // StartPhoneVerification — первый шаг регистрации. personal_data_consent
   // обязателен (152-ФЗ): без него — INVALID_ARGUMENT, запрос не создаёт
@@ -65,33 +68,46 @@ service IdentityRegistrationService {
   // отправляет одноразовый код по SMS. Повторный вызов с тем же телефоном в
   // рамках уже начатой регистрации — переотправка кода (тот же
   // registration_session_id, новый код, старый перестаёт быть действителен).
-  rpc StartPhoneVerification (StartPhoneVerificationRequest) returns (StartPhoneVerificationResponse);
+  rpc StartPhoneVerification (StartPhoneVerificationRequest) returns (StartPhoneVerificationResponse) {
+    option (webapi.options.v1.public) = true;
+  }
 
   // ConfirmPhoneVerification проверяет код из SMS. Неверный код —
   // UNAUTHENTICATED; истёкший или некорректный registration_session_id —
   // NOT_FOUND; слишком много неверных попыток — RESOURCE_EXHAUSTED. При
   // успехе телефон в рамках этой сессии считается подтверждённым и
   // открывает следующий шаг (StartEmailVerification).
-  rpc ConfirmPhoneVerification (ConfirmPhoneVerificationRequest) returns (ConfirmPhoneVerificationResponse);
+  rpc ConfirmPhoneVerification (ConfirmPhoneVerificationRequest) returns (ConfirmPhoneVerificationResponse) {
+    option (webapi.options.v1.public) = true;
+  }
 
   // StartEmailVerification — шаг после подтверждения телефона. Требует
   // подтверждённого телефона в этой сессии (иначе FAILED_PRECONDITION).
   // Если email уже привязан к другой учётной записи — ALREADY_EXISTS. При
   // успехе отправляет одноразовый код на почту; повторный вызов — переотправка.
-  rpc StartEmailVerification (StartEmailVerificationRequest) returns (StartEmailVerificationResponse);
+  rpc StartEmailVerification (StartEmailVerificationRequest) returns (StartEmailVerificationResponse) {
+    option (webapi.options.v1.public) = true;
+  }
 
   // ConfirmEmailVerification проверяет код из письма — коды ошибок те же,
   // что у ConfirmPhoneVerification. При успехе email подтверждён и
   // открывает финальный шаг (CompleteRegistration).
-  rpc ConfirmEmailVerification (ConfirmEmailVerificationRequest) returns (ConfirmEmailVerificationResponse);
+  rpc ConfirmEmailVerification (ConfirmEmailVerificationRequest) returns (ConfirmEmailVerificationResponse) {
+    option (webapi.options.v1.public) = true;
+  }
 
   // CompleteRegistration — финальный шаг: пользователь задаёт пароль. Как и
   // в IdentityAuthService.Register, пароль на сервер не передаётся —
   // salt/verifier клиент вычисляет локально (srp.GenerateSalt +
   // srp.ComputeVerifier) и присылает уже готовыми. Требует подтверждённых
   // телефона и email в этой сессии (иначе FAILED_PRECONDITION). Создаёт
-  // учётную запись и завершает сессию регистрации.
-  rpc CompleteRegistration (CompleteRegistrationRequest) returns (CompleteRegistrationResponse);
+  // учётную запись, завершает сессию регистрации и сразу логинит (те же
+  // access/refresh/session_info куки, что у CompleteAuthentication, см.
+  // internal/pkg/authctx) — отдельный повторный вход сразу после
+  // регистрации был бы лишним шагом.
+  rpc CompleteRegistration (CompleteRegistrationRequest) returns (CompleteRegistrationResponse) {
+    option (webapi.options.v1.public) = true;
+  }
 }
 
 message CheckIdentifierRequest {

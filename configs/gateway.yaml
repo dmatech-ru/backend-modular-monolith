@@ -1,6 +1,12 @@
 serviceName: "gateway-service"
 logLevel: "debug"
 env: "development"
+# Дев-секрет — должен побайтово совпадать с authJwtSecret в
+# configs/identity.yaml (см. комментарий там и README, раздел
+# "Авторизация"): gateway проверяет подпись access-токена этим же
+# секретом, которым его подписал identity. Для реального деплоя
+# сгенерировать свой (openssl rand -hex 32) и хранить как секрет, не здесь.
+authJwtSecret: "c0179ae0aa4319df5c8faaf00261f88617425c68ae14310137d944f3f43fee70"
 http:
   addr: ":1987"
   baseURL: "/api"

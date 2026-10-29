@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 
@@ -26,6 +27,14 @@ type Repository interface {
 	ConsumeChallenge(ctx context.Context, challengeID string) (repository.ChallengeRecord, error)
 }
 
+// SessionIssuer выпускает access/refresh для только что вошедшего/
+// зарегистрированного пользователя (см. CompleteAuthentication здесь и
+// CompleteRegistration в registration.go). Реализация — тонкая обёртка
+// над identity.sessions + internal/pkg/authctx (см. identity/session.go).
+type SessionIssuer interface {
+	IssueSession(ctx context.Context, userID, userAgent string) (access, refresh, permissions string, accessExpiresAt time.Time, err error)
+}
+
 // AuthHandler реализует authv1connect.IdentityAuthServiceHandler.
 type AuthHandler struct {
 	authv1connect.UnimplementedIdentityAuthServiceHandler
@@ -34,18 +43,19 @@ type AuthHandler struct {
 	// antiEnumKey — секрет для srp.FakeCredentials (защита InitializeSession
 	// от перечисления аккаунтов), см. комментарий там.
 	antiEnumKey []byte
+	sessions    SessionIssuer
 }
 
 // NewAuthHandler создаёт обработчик IdentityAuthService поверх repo.
 // antiEnumKey — секрет для srp.FakeCredentials, общий для всех реплик.
-func NewAuthHandler(repo Repository, antiEnumKey []byte) *AuthHandler {
-	return &AuthHandler{repo: repo, antiEnumKey: antiEnumKey}
+func NewAuthHandler(repo Repository, antiEnumKey []byte, sessions SessionIssuer) *AuthHandler {
+	return &AuthHandler{repo: repo, antiEnumKey: antiEnumKey, sessions: sessions}
 }
 
 // NewHandler собирает HTTP-обработчик IdentityAuthService для монтирования
 // в веб-сервер: возвращает путь монтирования и сам connect-handler.
-func NewHandler(repo Repository, antiEnumKey []byte, opts ...connect.HandlerOption) (string, http.Handler) {
-	return authv1connect.NewIdentityAuthServiceHandler(NewAuthHandler(repo, antiEnumKey), opts...)
+func NewHandler(repo Repository, antiEnumKey []byte, sessions SessionIssuer, opts ...connect.HandlerOption) (string, http.Handler) {
+	return authv1connect.NewIdentityAuthServiceHandler(NewAuthHandler(repo, antiEnumKey, sessions), opts...)
 }
 
 // InitializeSession — первый шаг SRP-входа: по identifier находит учётную
@@ -98,7 +108,10 @@ func (h *AuthHandler) InitializeSession(
 }
 
 // CompleteAuthentication — второй шаг SRP-входа: проверяет доказательство
-// клиента и, если оно верно, отвечает собственным доказательством.
+// клиента и, если оно верно, отвечает собственным доказательством, а также
+// выпускает access/refresh/session_info куки (см. internal/pkg/authctx и
+// identity/session.go) — это и есть момент, когда у клиента появляется
+// сессия.
 func (h *AuthHandler) CompleteAuthentication(
 	ctx context.Context,
 	req *connect.Request[authv1.CompleteAuthenticationRequest],
@@ -125,7 +138,18 @@ func (h *AuthHandler) CompleteAuthentication(
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
-	return connect.NewResponse(&authv1.CompleteAuthenticationResponse{ServerProof: serverProof}), nil
+	// challenge.UserID — nil только у фейкового challenge'а несуществующего
+	// identifier (см. srp.FakeCredentials в InitializeSession); проверка
+	// доказательства с таким challenge'ом не проходит ни при каком пароле,
+	// так что сюда можно дойти только с настоящим аккаунтом.
+	access, refresh, permissions, accessExpiresAt, err := h.sessions.IssueSession(ctx, *challenge.UserID, req.Header().Get("User-Agent"))
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	resp := connect.NewResponse(&authv1.CompleteAuthenticationResponse{ServerProof: serverProof})
+	setSessionCookies(resp.Header(), access, refresh, permissions, accessExpiresAt)
+	return resp, nil
 }
 
 // fieldError формирует connect-ошибку с деталью в виде common.ErrorPayload,

@@ -8,6 +8,7 @@ package recoveryv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "dmatech.ru/internal/pkg/contracts/webapi/v1/options"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -689,7 +690,7 @@ var File_webapi_v1_identity_recovery_recovery_proto protoreflect.FileDescriptor
 
 const file_webapi_v1_identity_recovery_recovery_proto_rawDesc = "" +
 	"\n" +
-	"*webapi/v1/identity/recovery/recovery.proto\x12\x1bwebapi.identity.recovery.v1\x1a\x1bbuf/validate/validate.proto\"\xd8\x01\n" +
+	"*webapi/v1/identity/recovery/recovery.proto\x12\x1bwebapi.identity.recovery.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fwebapi/v1/options/options.proto\"\xd8\x01\n" +
 	"\x17InitiateRecoveryRequest\x12{\n" +
 	"\n" +
 	"identifier\x18\x01 \x01(\tB[\xbaHX\xba\x01U\n" +
@@ -740,12 +741,12 @@ const file_webapi_v1_identity_recovery_recovery_proto_rawDesc = "" +
 	"\x16DELIVERY_CHANNEL_EMAIL\x10\x01\x12\x18\n" +
 	"\x14DELIVERY_CHANNEL_SMS\x10\x02\x12\x1d\n" +
 	"\x19DELIVERY_CHANNEL_TELEGRAM\x10\x03\x12\x18\n" +
-	"\x14DELIVERY_CHANNEL_MAX\x10\x042\x9e\x04\n" +
-	"\x17IdentityRecoveryService\x12\x7f\n" +
-	"\x10InitiateRecovery\x124.webapi.identity.recovery.v1.InitiateRecoveryRequest\x1a5.webapi.identity.recovery.v1.InitiateRecoveryResponse\x12\x7f\n" +
-	"\x10SendRecoveryCode\x124.webapi.identity.recovery.v1.SendRecoveryCodeRequest\x1a5.webapi.identity.recovery.v1.SendRecoveryCodeResponse\x12\x88\x01\n" +
-	"\x13ConfirmRecoveryCode\x127.webapi.identity.recovery.v1.ConfirmRecoveryCodeRequest\x1a8.webapi.identity.recovery.v1.ConfirmRecoveryCodeResponse\x12v\n" +
-	"\rResetPassword\x121.webapi.identity.recovery.v1.ResetPasswordRequest\x1a2.webapi.identity.recovery.v1.ResetPasswordResponseB\x89\x02\n" +
+	"\x14DELIVERY_CHANNEL_MAX\x10\x042\xb8\x04\n" +
+	"\x17IdentityRecoveryService\x12\x85\x01\n" +
+	"\x10InitiateRecovery\x124.webapi.identity.recovery.v1.InitiateRecoveryRequest\x1a5.webapi.identity.recovery.v1.InitiateRecoveryResponse\"\x04\x80\xb5\x18\x01\x12\x85\x01\n" +
+	"\x10SendRecoveryCode\x124.webapi.identity.recovery.v1.SendRecoveryCodeRequest\x1a5.webapi.identity.recovery.v1.SendRecoveryCodeResponse\"\x04\x80\xb5\x18\x01\x12\x8e\x01\n" +
+	"\x13ConfirmRecoveryCode\x127.webapi.identity.recovery.v1.ConfirmRecoveryCodeRequest\x1a8.webapi.identity.recovery.v1.ConfirmRecoveryCodeResponse\"\x04\x80\xb5\x18\x01\x12|\n" +
+	"\rResetPassword\x121.webapi.identity.recovery.v1.ResetPasswordRequest\x1a2.webapi.identity.recovery.v1.ResetPasswordResponse\"\x04\x80\xb5\x18\x01B\x89\x02\n" +
 	"\x1fcom.webapi.identity.recovery.v1B\rRecoveryProtoP\x01ZHdmatech.ru/internal/pkg/contracts/webapi/v1/identity/recovery;recoveryv1\xa2\x02\x03WIR\xaa\x02\x1bWebapi.Identity.Recovery.V1\xca\x02\x1bWebapi\\Identity\\Recovery\\V1\xe2\x02'Webapi\\Identity\\Recovery\\V1\\GPBMetadata\xea\x02\x1eWebapi::Identity::Recovery::V1b\x06proto3"
 
 var (

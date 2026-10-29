@@ -5,12 +5,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"sync"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 
 	"dmatech.ru/internal/modules/identity/repository"
+	"dmatech.ru/internal/pkg/authctx"
 	common "dmatech.ru/internal/pkg/contracts/webapi/v1/common"
 	authv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/auth"
 	"dmatech.ru/internal/pkg/srp"
@@ -88,8 +91,59 @@ func (f *fakeRepository) seedUser(identifier, password string) {
 // см. комментарий у AntiEnumerationKey в identity/config.go).
 var testAntiEnumKey = []byte("test-anti-enumeration-key-32-bytes!")
 
+// fakeSessions — Sessions (SessionIssuer+SessionStore+SessionRevoker) в
+// памяти для тестов: реального identity.sessions/JWT не нужно, только
+// фиксированные значения, чтобы проверить, что хендлеры вызывают эти
+// методы и выставляют куки на успехе.
+type fakeSessions struct {
+	mu             sync.Mutex
+	nextID         int
+	revoked        map[string]bool // userID -> RevokeAllSessions вызывался
+	revokedRefresh []string        // refresh-токены, с которыми звали Revoke
+	rotateErr      error
+	revokeErr      error
+}
+
+func newFakeSessions() *fakeSessions {
+	return &fakeSessions{revoked: map[string]bool{}}
+}
+
+func (f *fakeSessions) IssueSession(_ context.Context, userID, _ string) (access, refresh, permissions string, accessExpiresAt time.Time, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	return fmt.Sprintf("access-%s-%d", userID, f.nextID), fmt.Sprintf("refresh-%s-%d", userID, f.nextID), "", time.Now().Add(time.Hour), nil
+}
+
+func (f *fakeSessions) Rotate(_ context.Context, refreshToken, _ string) (access, refresh, permissions string, accessExpiresAt time.Time, err error) {
+	if f.rotateErr != nil {
+		return "", "", "", time.Time{}, f.rotateErr
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	return fmt.Sprintf("new-access-%d", f.nextID), fmt.Sprintf("new-refresh-%d", f.nextID), "", time.Now().Add(time.Hour), nil
+}
+
+func (f *fakeSessions) Revoke(_ context.Context, refreshToken string) error {
+	if f.revokeErr != nil {
+		return f.revokeErr
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.revokedRefresh = append(f.revokedRefresh, refreshToken)
+	return nil
+}
+
+func (f *fakeSessions) RevokeAllSessions(_ context.Context, userID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.revoked[userID] = true
+	return nil
+}
+
 func newTestHandler() *AuthHandler {
-	return NewAuthHandler(newFakeRepository(), testAntiEnumKey)
+	return NewAuthHandler(newFakeRepository(), testAntiEnumKey, newFakeSessions())
 }
 
 func connectCode(t *testing.T, err error) connect.Code {
@@ -169,8 +223,8 @@ func TestInitializeSession_UnknownIdentifierSaltIsStable(t *testing.T) {
 func TestInitializeSession_UnknownIdentifierLooksTheSameAcrossReplicas(t *testing.T) {
 	// Две разные "реплики" (разные fakeRepository) с одним и тем же секретом
 	// должны отвечать одинаково для одного и того же неизвестного identifier.
-	h1 := NewAuthHandler(newFakeRepository(), testAntiEnumKey)
-	h2 := NewAuthHandler(newFakeRepository(), testAntiEnumKey)
+	h1 := NewAuthHandler(newFakeRepository(), testAntiEnumKey, newFakeSessions())
+	h2 := NewAuthHandler(newFakeRepository(), testAntiEnumKey, newFakeSessions())
 	req := connect.NewRequest(&authv1.InitializeSessionRequest{Identifier: "unknown@example.com"})
 
 	resp1, err := h1.InitializeSession(context.Background(), req)
@@ -232,7 +286,7 @@ func loginAs(t *testing.T, h *AuthHandler, identifier, password string) (*connec
 
 func TestAuthFlow_RegisterThenLoginSucceeds(t *testing.T) {
 	repo := newFakeRepository()
-	h := NewAuthHandler(repo, testAntiEnumKey)
+	h := NewAuthHandler(repo, testAntiEnumKey, newFakeSessions())
 	const identifier = "alice@example.com"
 	const password = "correct horse battery staple"
 
@@ -247,9 +301,36 @@ func TestAuthFlow_RegisterThenLoginSucceeds(t *testing.T) {
 	}
 }
 
+// CompleteAuthentication — момент, когда у клиента появляется сессия (см.
+// doc-комментарий метода): успешный вход должен выставить все три куки.
+func TestAuthFlow_SuccessfulLoginSetsSessionCookies(t *testing.T) {
+	repo := newFakeRepository()
+	h := NewAuthHandler(repo, testAntiEnumKey, newFakeSessions())
+	const identifier = "alice@example.com"
+	const password = "correct horse battery staple"
+
+	repo.seedUser(identifier, password)
+
+	resp, err := loginAs(t, h, identifier, password)
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+
+	cookies := (&http.Response{Header: resp.Header()}).Cookies()
+	names := map[string]bool{}
+	for _, c := range cookies {
+		names[c.Name] = true
+	}
+	for _, want := range []string{authctx.CookieAccessToken, authctx.CookieRefreshToken, authctx.CookieSessionInfo} {
+		if !names[want] {
+			t.Fatalf("missing %s cookie in response, got %v", want, names)
+		}
+	}
+}
+
 func TestAuthFlow_WrongPasswordIsRejected(t *testing.T) {
 	repo := newFakeRepository()
-	h := NewAuthHandler(repo, testAntiEnumKey)
+	h := NewAuthHandler(repo, testAntiEnumKey, newFakeSessions())
 	const identifier = "alice@example.com"
 
 	repo.seedUser(identifier, "correct horse battery staple")
@@ -262,7 +343,7 @@ func TestAuthFlow_WrongPasswordIsRejected(t *testing.T) {
 
 func TestCompleteAuthentication_SessionIsSingleUse(t *testing.T) {
 	repo := newFakeRepository()
-	h := NewAuthHandler(repo, testAntiEnumKey)
+	h := NewAuthHandler(repo, testAntiEnumKey, newFakeSessions())
 	const identifier = "alice@example.com"
 	const password = "correct horse battery staple"
 

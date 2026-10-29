@@ -42,13 +42,23 @@ type RecoveryCodeSender interface {
 	SendCode(ctx context.Context, channel deliveryv1.DeliveryChannel, destination, code string) error
 }
 
+// SessionRevoker гасит все сессии пользователя — после сброса пароля (см.
+// ResetPassword) ни один ранее выданный refresh-токен не должен
+// продолжать работать. Отдельный от SessionStore интерфейс: там гашение
+// по refresh-токену (Logout), здесь — по user_id, без какого-либо токена
+// на руках у вызывающего кода.
+type SessionRevoker interface {
+	RevokeAllSessions(ctx context.Context, userID string) error
+}
+
 // RecoveryHandler реализует recoveryv1connect.IdentityRecoveryServiceHandler.
 type RecoveryHandler struct {
 	recoveryv1connect.UnimplementedIdentityRecoveryServiceHandler
 
-	repo    RecoveryRepository
-	captcha CaptchaClient
-	codes   RecoveryCodeSender
+	repo     RecoveryRepository
+	captcha  CaptchaClient
+	codes    RecoveryCodeSender
+	sessions SessionRevoker
 	// passwordResetFreeze — см. ResetPasswordResponse.frozen_until в
 	// recovery.proto: период после смены пароля, задуманный как окно, в
 	// течение которого чувствительные операции должны быть недоступны
@@ -57,14 +67,14 @@ type RecoveryHandler struct {
 }
 
 // NewRecoveryHandler создаёт обработчик IdentityRecoveryService.
-func NewRecoveryHandler(repo RecoveryRepository, captcha CaptchaClient, codes RecoveryCodeSender, passwordResetFreeze time.Duration) *RecoveryHandler {
-	return &RecoveryHandler{repo: repo, captcha: captcha, codes: codes, passwordResetFreeze: passwordResetFreeze}
+func NewRecoveryHandler(repo RecoveryRepository, captcha CaptchaClient, codes RecoveryCodeSender, sessions SessionRevoker, passwordResetFreeze time.Duration) *RecoveryHandler {
+	return &RecoveryHandler{repo: repo, captcha: captcha, codes: codes, sessions: sessions, passwordResetFreeze: passwordResetFreeze}
 }
 
 // NewRecoveryServiceHandler собирает HTTP-обработчик IdentityRecoveryService
 // для монтирования в веб-сервер.
-func NewRecoveryServiceHandler(repo RecoveryRepository, captcha CaptchaClient, codes RecoveryCodeSender, passwordResetFreeze time.Duration, opts ...connect.HandlerOption) (string, http.Handler) {
-	return recoveryv1connect.NewIdentityRecoveryServiceHandler(NewRecoveryHandler(repo, captcha, codes, passwordResetFreeze), opts...)
+func NewRecoveryServiceHandler(repo RecoveryRepository, captcha CaptchaClient, codes RecoveryCodeSender, sessions SessionRevoker, passwordResetFreeze time.Duration, opts ...connect.HandlerOption) (string, http.Handler) {
+	return recoveryv1connect.NewIdentityRecoveryServiceHandler(NewRecoveryHandler(repo, captcha, codes, sessions, passwordResetFreeze), opts...)
 }
 
 // verifyPoW — см. комментарий у RegistrationHandler.verifyPoW; тот же приём,
@@ -331,13 +341,20 @@ func (h *RecoveryHandler) ResetPassword(
 		return nil, fieldError(connect.CodeInvalidArgument, "verifier", "identity.verifier.invalid", "verifier is missing or malformed")
 	}
 
-	_, changedAt, err := h.repo.ResetRecoveryPassword(ctx, sessionID, salt, verifier)
+	userID, changedAt, err := h.repo.ResetRecoveryPassword(ctx, sessionID, salt, verifier)
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
 		return nil, keyedError(connect.CodeNotFound, "identity.recovery_session.not_found", "recovery session not found or expired")
 	case errors.Is(err, repository.ErrRecoveryCodeNotVerified):
 		return nil, keyedError(connect.CodeFailedPrecondition, "identity.recovery_code.not_confirmed", "recovery code must be confirmed first")
 	case err != nil:
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	// Гасит все сессии пользователя (см. doc-комментарий ResetPassword в
+	// recovery.proto) — после сброса пароля ни один ранее выданный
+	// refresh-токен не должен продолжать работать.
+	if err := h.sessions.RevokeAllSessions(ctx, userID); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 

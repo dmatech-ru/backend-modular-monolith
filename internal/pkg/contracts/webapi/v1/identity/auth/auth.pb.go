@@ -8,6 +8,7 @@ package authv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "dmatech.ru/internal/pkg/contracts/webapi/v1/options"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -244,7 +245,7 @@ var File_webapi_v1_identity_auth_auth_proto protoreflect.FileDescriptor
 
 const file_webapi_v1_identity_auth_auth_proto_rawDesc = "" +
 	"\n" +
-	"\"webapi/v1/identity/auth/auth.proto\x12\x17webapi.identity.auth.v1\x1a\x1bbuf/validate/validate.proto\"\x97\x01\n" +
+	"\"webapi/v1/identity/auth/auth.proto\x12\x17webapi.identity.auth.v1\x1a\x1bbuf/validate/validate.proto\x1a\x1fwebapi/v1/options/options.proto\"\x97\x01\n" +
 	"\x18InitializeSessionRequest\x12{\n" +
 	"\n" +
 	"identifier\x18\x01 \x01(\tB[\xbaHX\xba\x01U\n" +
@@ -264,10 +265,10 @@ const file_webapi_v1_identity_auth_auth_proto_rawDesc = "" +
 	"\fclient_proof\x18\x03 \x01(\fBW\xbaHT\xba\x01Q\n" +
 	"\x1eidentity.client_proof.required\x12\x1eclient_proof must not be empty\x1a\x0fthis.size() > 0R\vclientProof\"C\n" +
 	"\x1eCompleteAuthenticationResponse\x12!\n" +
-	"\fserver_proof\x18\x01 \x01(\fR\vserverProof2\x9d\x02\n" +
-	"\x13IdentityAuthService\x12z\n" +
-	"\x11InitializeSession\x121.webapi.identity.auth.v1.InitializeSessionRequest\x1a2.webapi.identity.auth.v1.InitializeSessionResponse\x12\x89\x01\n" +
-	"\x16CompleteAuthentication\x126.webapi.identity.auth.v1.CompleteAuthenticationRequest\x1a7.webapi.identity.auth.v1.CompleteAuthenticationResponseB\xe9\x01\n" +
+	"\fserver_proof\x18\x01 \x01(\fR\vserverProof2\xaa\x02\n" +
+	"\x13IdentityAuthService\x12\x80\x01\n" +
+	"\x11InitializeSession\x121.webapi.identity.auth.v1.InitializeSessionRequest\x1a2.webapi.identity.auth.v1.InitializeSessionResponse\"\x04\x80\xb5\x18\x01\x12\x8f\x01\n" +
+	"\x16CompleteAuthentication\x126.webapi.identity.auth.v1.CompleteAuthenticationRequest\x1a7.webapi.identity.auth.v1.CompleteAuthenticationResponse\"\x04\x80\xb5\x18\x01B\xe9\x01\n" +
 	"\x1bcom.webapi.identity.auth.v1B\tAuthProtoP\x01Z@dmatech.ru/internal/pkg/contracts/webapi/v1/identity/auth;authv1\xa2\x02\x03WIA\xaa\x02\x17Webapi.Identity.Auth.V1\xca\x02\x17Webapi\\Identity\\Auth\\V1\xe2\x02#Webapi\\Identity\\Auth\\V1\\GPBMetadata\xea\x02\x1aWebapi::Identity::Auth::V1b\x06proto3"
 
 var (

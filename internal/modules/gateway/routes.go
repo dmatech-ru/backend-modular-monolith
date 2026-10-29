@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 
+	optionsv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/options"
 	"dmatech.ru/internal/pkg/natsdiscovery"
 )
 
@@ -22,6 +23,11 @@ type route struct {
 	// Procedures — полные имена gRPC/Connect-сервисов (package.Service),
 	// извлечённые из дескриптора; по ним строится маршрутизация в handleProxy.
 	Procedures []string `json:"procedures,omitempty"`
+	// PublicMethods — какие "/package.Service/Method" из этого маршрута не
+	// требуют access-токена (см. (webapi.options.v1.public) в .proto и
+	// doc-комментарий handleAuth) — default-deny: метод, которого здесь нет,
+	// требует валидный токен.
+	PublicMethods map[string]bool `json:"publicMethods,omitempty"`
 }
 
 // routeTable — потокобезопасная таблица маршрутов, наполняемая из discovery.
@@ -61,19 +67,20 @@ func (t *routeTable) Apply(u natsdiscovery.RouteUpdate) {
 		return
 	}
 
-	procedures, err := extractServiceNames(u.Descriptor)
+	procedures, publicMethods, err := extractServiceInfo(u.Descriptor)
 	if err != nil {
 		t.log.Warn("Failed to parse route descriptor, proxying for this route is unavailable",
 			"service", u.ServiceName, "version", u.Version, "error", err)
 	}
 
 	t.routes[id] = route{
-		Service:    u.ServiceName,
-		Version:    u.Version,
-		Descriptor: u.Descriptor,
-		Size:       len(u.Descriptor),
-		UpdatedAt:  time.Now(),
-		Procedures: procedures,
+		Service:       u.ServiceName,
+		Version:       u.Version,
+		Descriptor:    u.Descriptor,
+		Size:          len(u.Descriptor),
+		UpdatedAt:     time.Now(),
+		Procedures:    procedures,
+		PublicMethods: publicMethods,
 	}
 	for _, svc := range procedures {
 		t.services[svc] = id
@@ -109,28 +116,44 @@ func (t *routeTable) LookupService(serviceFullName string) (route, bool) {
 	return r, ok
 }
 
-// extractServiceNames разбирает дескриптор (protobuf.FileDescriptorSet, см.
-// protoset.Build) и возвращает полные имена описанных в нём сервисов.
-func extractServiceNames(descriptor []byte) ([]string, error) {
+// extractServiceInfo разбирает дескриптор (protobuf.FileDescriptorSet, см.
+// protoset.Build) и возвращает полные имена описанных в нём сервисов
+// (procedures, как раньше) и то, какие из их методов отмечены
+// (webapi.options.v1.public) = true (publicMethods, ключ — ровно тот же
+// "/package.Service/Method", что handleProxy вычисляет из r.URL.Path).
+//
+// proto.GetExtension видит это расширение только потому, что его
+// сгенерированный Go-пакет (optionsv1) где-то импортирован этим бинарём
+// (gateway) — импорт регистрирует расширение в protoregistry.GlobalTypes,
+// после чего proto.Unmarshal начинает его декодировать как обычное поле, а
+// не как неизвестные байты (тот же механизм, что уже используется для
+// buf.validate.field, см. internal/pkg/validation).
+func extractServiceInfo(descriptor []byte) (procedures []string, publicMethods map[string]bool, err error) {
 	if len(descriptor) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	var set descriptorpb.FileDescriptorSet
 	if err := proto.Unmarshal(descriptor, &set); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	var names []string
+	publicMethods = make(map[string]bool)
 	for _, f := range set.GetFile() {
 		pkg := f.GetPackage()
 		for _, svc := range f.GetService() {
-			if pkg == "" {
-				names = append(names, svc.GetName())
-			} else {
-				names = append(names, pkg+"."+svc.GetName())
+			svcFullName := svc.GetName()
+			if pkg != "" {
+				svcFullName = pkg + "." + svc.GetName()
+			}
+			procedures = append(procedures, svcFullName)
+
+			for _, m := range svc.GetMethod() {
+				if public, _ := proto.GetExtension(m.GetOptions(), optionsv1.E_Public).(bool); public {
+					publicMethods["/"+svcFullName+"/"+m.GetName()] = true
+				}
 			}
 		}
 	}
-	return names, nil
+	return procedures, publicMethods, nil
 }

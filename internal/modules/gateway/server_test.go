@@ -16,6 +16,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 
+	"dmatech.ru/internal/pkg/authctx"
 	authv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/auth"
 	"dmatech.ru/internal/pkg/natsdiscovery"
 	"dmatech.ru/internal/pkg/natsrpc"
@@ -29,9 +30,13 @@ func discardLogger() *slog.Logger {
 }
 
 func testServer(cfg HttpConfig, nc *nats.Conn) (*server, *routeTable) {
+	return testServerWithVerifier(cfg, nc, nil)
+}
+
+func testServerWithVerifier(cfg HttpConfig, nc *nats.Conn, verifier *authctx.Verifier) (*server, *routeTable) {
 	log := discardLogger()
 	routes := newRouteTable(log)
-	return newServer(cfg, testEnv, log, routes, nc), routes
+	return newServer(cfg, testEnv, log, routes, nc, verifier), routes
 }
 
 func serve(s *server, method, target string, body io.Reader) *httptest.ResponseRecorder {

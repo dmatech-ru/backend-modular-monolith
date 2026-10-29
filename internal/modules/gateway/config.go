@@ -62,4 +62,14 @@ type configuration struct {
 	Http        HttpConfig `yaml:"http"`
 	LogLevel    string     `yaml:"logLevel" env:"GATEWAY_LOG_LEVEL" env-default:"info"`
 	Env         string     `yaml:"env" env:"GATEWAY_ENV" env-default:"development"`
+
+	// AuthJWTSecret — hex-секрет (≥32 байта), которым identity подписывает
+	// access-токены (internal/pkg/authctx.Issuer) и которым гейтвей их
+	// проверяет (authctx.Verifier) перед тем, как проксировать непубличный
+	// запрос. Единственный секрет в проекте, общий не с одним конкретным
+	// модулем (как antiEnumerationKey — только identity), а с gateway —
+	// поэтому имя переменной без обычного префикса GATEWAY_/IDENTITY_, той
+	// же категории, что NATS_URL/APP_ENV: значение должно быть побайтово
+	// одинаковым в конфиге identity и в этом конфиге.
+	AuthJWTSecret string `yaml:"authJwtSecret" env:"AUTH_JWT_SECRET" env-required:"true"`
 }

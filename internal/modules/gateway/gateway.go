@@ -6,6 +6,7 @@ import (
 
 	"github.com/nats-io/nats.go"
 
+	"dmatech.ru/internal/pkg/authctx"
 	"dmatech.ru/internal/pkg/config"
 	"dmatech.ru/internal/pkg/logger"
 	"dmatech.ru/internal/pkg/natsdiscovery"
@@ -31,6 +32,12 @@ func initialization(ctx context.Context) error {
 		return fmt.Errorf("gateway: %w", err)
 	}
 
+	secret, err := authctx.DecodeSecret(cfg.AuthJWTSecret)
+	if err != nil {
+		return fmt.Errorf("gateway: %w", err)
+	}
+	verifier := authctx.NewVerifier(secret)
+
 	routes := newRouteTable(log)
 
 	watcher, err := natsdiscovery.WatchRoutes(ctx, nc, log, cfg.Env, routes.Apply)
@@ -45,7 +52,7 @@ func initialization(ctx context.Context) error {
 	reaper := natsdiscovery.StartStaleRouteReaper(nc, log, cfg.Env, natsdiscovery.DefaultStaleRouteReapInterval)
 	service.OnShutdown(reaper.Close)
 
-	srv := newServer(cfg.Http, cfg.Env, log, routes, nc)
+	srv := newServer(cfg.Http, cfg.Env, log, routes, nc, verifier)
 	if err := srv.Start(); err != nil {
 		return fmt.Errorf("failed to start http server: %w", err)
 	}

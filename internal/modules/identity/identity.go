@@ -11,9 +11,11 @@ import (
 
 	authhandler "dmatech.ru/internal/modules/identity/handlers/webapi/v1"
 	identityrepo "dmatech.ru/internal/modules/identity/repository"
+	"dmatech.ru/internal/pkg/authctx"
 	authv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/auth"
 	recoveryv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/recovery"
 	registrationv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/registration"
+	sessionv1 "dmatech.ru/internal/pkg/contracts/webapi/v1/identity/session"
 
 	"dmatech.ru/internal/pkg/config"
 	"dmatech.ru/internal/pkg/logger"
@@ -78,6 +80,12 @@ func initialization(ctx context.Context) error {
 		return fmt.Errorf("identity: %w", err)
 	}
 
+	authSecret, err := authctx.DecodeSecret(cfg.AuthJWTSecret)
+	if err != nil {
+		return fmt.Errorf("identity: %w", err)
+	}
+	tokenIssuer := authctx.NewIssuer(authSecret, identityrepo.AccessTokenTTL())
+
 	pool, err := postgres.Connect(ctx, postgres.Config{URL: cfg.PostgresURL, ServiceName: cfg.ServiceName}, log)
 	if err != nil {
 		return fmt.Errorf("identity: %w", err)
@@ -96,6 +104,7 @@ func initialization(ctx context.Context) error {
 		authv1.File_webapi_v1_identity_auth_auth_proto,
 		registrationv1.File_webapi_v1_identity_registration_registration_proto,
 		recoveryv1.File_webapi_v1_identity_recovery_recovery_proto,
+		sessionv1.File_webapi_v1_identity_session_session_proto,
 	)
 	if err != nil {
 		return fmt.Errorf("identity: failed to build descriptor set: %w", err)
@@ -114,10 +123,11 @@ func initialization(ctx context.Context) error {
 	emails := &otpEmailSender{client: notifications}
 	recoveryCodes := &recoveryCodeSender{client: notifications}
 	passwordResetFreeze := time.Duration(cfg.PasswordResetFreezeHours) * time.Hour
+	sessions := newSessionManager(repo, tokenIssuer)
 
 	sub, err := authhandler.Subscribe(nc, log, cfg.Env, cfg.ServiceName, cfg.AppVersion, validator,
 		repo, antiEnumKey, repo, captcha, phones, emails,
-		repo, recoveryCodes, passwordResetFreeze)
+		repo, recoveryCodes, passwordResetFreeze, sessions)
 	if err != nil {
 		return fmt.Errorf("failed to subscribe identity services: %w", err)
 	}
